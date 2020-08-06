@@ -1,2 +1,4 @@
 # huntsman-drp
-Imaging pipeline tools and flow.
+Auxillary funtions for `huntsman-pocs` and `obs-huntsman`. Including:
+- NGAS tools
+- Reference catalogue tools
