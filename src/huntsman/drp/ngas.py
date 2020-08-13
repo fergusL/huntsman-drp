@@ -1,5 +1,5 @@
 import requests
-from huntsman.utils.base import HuntsmanBase
+from huntsman.drp.base import HuntsmanBase
 
 
 class NgasClient(HuntsmanBase):

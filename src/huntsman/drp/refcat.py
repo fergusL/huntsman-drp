@@ -1,6 +1,9 @@
+from tempfile import NamedTemporaryFile
 from contextlib import suppress
+import numpy as np
+import pandas as pd
 from astroquery.utils.tap.core import TapPlus
-from huntsman.utils.base import HuntsmanBase
+from huntsman.drp.base import HuntsmanBase
 
 
 class TapReferenceCatalogue(HuntsmanBase):
@@ -11,8 +14,10 @@ class TapReferenceCatalogue(HuntsmanBase):
 
         # Extract attribute values from config
         self._cone_search_radius = self.config["refcat"]["cone_search_radius"]
-        self._ra_key = self.config["refcat"].get("ra_key", "raj2000")
-        self._dec_key = self.config["refcat"].get("ra_key", "dej2000")
+        self._ra_key = self.config["refcat"]["ra_key"]
+        self._dec_key = self.config["refcat"]["dec_key"]
+        self._unique_key = self.config["refcat"]["unique_source_key"]
+
         self._tap_url = self.config["refcat"]["tap_url"]
         self._tap_table = self.config["refcat"]["tap_table"]
         self._tap_limit = self.config["refcat"].get("tap_limit", None)
@@ -31,7 +36,7 @@ class TapReferenceCatalogue(HuntsmanBase):
             filename: Filename of the returned .csv file.
 
         Returns:
-            An astroquery.Job object.
+            pandas.DataFrame: The source catalogue.
         """
         query = f"SELECT * FROM {self._tap_table}"
 
@@ -52,6 +57,36 @@ class TapReferenceCatalogue(HuntsmanBase):
 
         # Start the query
         self.logger.debug(f"Cone search command: {query}.")
-        job = self._tap.launch_job_async(query, dump_to_file=True, output_format="csv",
-                                         output_file=filename)
-        return job
+        self._tap.launch_job_async(query, dump_to_file=True, output_format="csv",
+                                   output_file=filename)
+        return pd.read_csv(filename)
+
+    def create_refcat(self, ra_list, dec_list, filename=None):
+        """
+        Create the master reference catalogue with no source duplications.
+
+        Args:
+            ra_list (iterable): List of RA in J2000 degrees.
+            dec_list (iterable): List of Dec in J2000 degrees.
+            filename (string, optional): Filename to save output catalogue.
+
+        Returns:
+            pandas.DataFrame: The reference catalogue.
+        """
+        result = None
+        with NamedTemporaryFile(delete=True) as tempfile:
+            for ra, dec in zip(ra_list, dec_list):
+                # Do the cone search and get result
+                df = self.cone_search(ra, dec, filename=tempfile.name)
+                # First iteration
+                if result is None:
+                    result = df
+                    continue
+                # Remove existing sources & concat
+                is_new = np.isin(df[self._unique_key].values, result[self._unique_key].values,
+                                 invert=True)
+                result = pd.concat([result, df[is_new]], ignore_index=False)
+        self.logger.debug(f"{result.shape[0]} sources in reference catalogue.")
+        if filename is not None:
+            result.to_csv(filename)
+        return result

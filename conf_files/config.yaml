@@ -1,10 +1,13 @@
 ngas:
   server: localhost
   port: 7778
-  
+
 refcat:
   tap_url: http://api.skymapper.nci.org.au/aus/tap/
   tap_table: dr3.master
+  ra_key: raj2000
+  dec_key: dej2000
+  unique_source_key: object_id
   cone_search_radius: 2
   parameter_ranges:
     class_star:

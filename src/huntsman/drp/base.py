@@ -21,7 +21,7 @@ class HuntsmanBase():
 
     def _load_config(self, filename):
         if filename is None:
-            filename = os.path.join(os.environ["HUNTSMAN_UTILS"], "conf_files", "config.yaml")
+            filename = os.path.join(os.environ["HUNTSMAN_DRP"], "conf_files", "config.yaml")
         with open(filename, 'r') as f:
             config = yaml.safe_load(f)
         return config
