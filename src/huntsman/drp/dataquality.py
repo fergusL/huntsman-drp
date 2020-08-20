@@ -18,7 +18,9 @@ def make_calexps(workdir):
     pass
 
 
-def get_science_data_quality(data_directory):
+def generate_science_data_quality(mdb,
+                                  date_min,
+                                  date_max):
     """
 
     """
