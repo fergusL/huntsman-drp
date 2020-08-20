@@ -3,6 +3,7 @@ import shutil
 from huntsman.drp.metadatabase import MetaDatabase
 from huntsman.drp.calibs import make_recent_calibs
 from huntsman.drp.calexp import make_calexps, get_calexp_metadata
+from huntsman.drp.utils import get_simple_image_data_stats
 
 
 def make_calexps(workdir):
@@ -45,3 +46,23 @@ def generate_science_data_quality(mdb,
     # Clean up directories
     for subdir in [calibdir, sciencedir, calexpdir]:
         shutil.rmtree(subdir)
+
+
+def generate_calib_data_quality(mdb,
+                                date_min,
+                                date_max):
+    """Populate meta DB with data quality metrics for
+    calibration data taken over the given date range.
+
+    Args:
+        mdb (MetaDatabase): Instance of the meta DB.
+        date_min (datetime): Start of date to query.
+        date_max (datetime): End of date to query
+    """
+    filename_list = mdb.retrieve_files(data_type="calib",
+                                       date_min=date_min,
+                                       date_max=date_max)
+
+    stats_dict = get_simple_image_data_stats(filename_list)
+
+    mdb.ingest_calib_stats(stats_dict)
