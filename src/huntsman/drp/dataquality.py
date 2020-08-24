@@ -1,51 +1,87 @@
 import os
-import shutil
+from contextlib import suppress
+from tempfile import TemporaryDirectory
+
 from huntsman.drp.metadatabase import MetaDatabase
 from huntsman.drp.calibs import make_recent_calibs
-from huntsman.drp.calexp import make_calexps, get_calexp_metadata
-from huntsman.drp.utils import get_simple_image_data_stats
+from huntsman.drp.lsst import ingest_raw_data
 
 
-def make_calexps(workdir):
+class TemporaryButler():
+    _mapper = "lsst.obs.huntsman.HuntsmanMapper"
+
+    def __init__(self):
+        self._tempdir = None
+
+    def __enter__(self):
+        """Create temporary directory and initialise as a Bulter repository."""
+        self._tempdir = TemporaryDirectory()
+        self._initialise_directory()
+
+    def __exit__(self, *args, **kwargs):
+        """Close temporary directory."""
+        self._tempdir.close()
+        self._tempdir = None
+
+    def ingest_raw_data(self, filenames):
+        """Ingest raw data into the repository."""
+        ingest_raw_data(filenames, bulter_directory=self._tempdir.name)
+
+    def make_master_calibs(self):
+        """Make master calibs from ingested raw calibs."""
+        make_recent_calibs(bulter_directory=self._tempdir.name)
+
+    def make_calexps(self):
+        """Make calibrated science exposures (calexps) from ingested raw data."""
+        pass
+
+    def get_calexp_metadata(self):
+        """Get calibrated science exposure (calexp) metadata"""
+        pass
+
+      
+    def _initialise_directory(self):
+        """Initialise a new butler repository."""
+        # Add the mapper file to each subdirectory, making directory if necessary
+        for subdir in ["", "CALIB"]:
+            dir = os.path.join(self._tempdir.name, subdir)
+            with suppress(FileExistsError):
+                os.mkdir(dir)
+            filename_mapper = os.path.join(dir, "__mapper")
+            with open(filename_mapper, "w") as f:
+                f.write(self._mapper)
+
+
+def generate_science_data_quality(meta_database=None, table="calexp_qc"):
     """
-    Call processCcd.py and record appropriate metadata, e.g.
-        - PSF model paramters.
-        - Photometric zero point.
-        - Background level & RMS.
+    Generate metadata for science data.
 
-    Parameters:
-        workdir (str): The working directory to mount inside the docker image.
+    Args:
+        meta_database (huntsman.drp.MetaDatabase, optional): The meta database object.
+        table (str, optional): The table in which to insert the resulting metadata.
     """
-    pass
+    if meta_database is None:
+        meta_database = MetaDatabase()
 
+    # Get filenames of science data to process
+    filenames = meta_database.query_recent_files()
 
-def generate_science_data_quality(mdb,
-                                  date_min,
-                                  date_max):
-    """
+    # Create a new butler repo in temp directory
+    with TemporaryButler() as butler_repo:
 
-    """
-    # Query the database for the lastest science files and copy
-    mdb = MetaDatabase()
-    sciencedir = os.path.join(data_directory, "raw")
-    mdb.retrieve_files(directory=sciencedir, data_type="science")
+        # Ingest raw data
+        butler_repo.ingest_raw_data(filenames)
 
-    # Make the daily master calibs
-    calibdir = os.path.join(data_directory, "calib")
-    make_recent_calibs(output_directory=calibdir)
+        # Make master calibs for today (discarded after use)
+        butler_repo.make_master_calibs()
 
-    # Create the calexps and retrieve metadata
-    calexpdir = os.path.join(data_directory, "calexp")
-    make_calexps(workdir=data_directory)
-    calexp_metadata = get_calexp_metadata()
+        # Make the calexps
+        butler_repo.make_calexps()
 
-    # Insert results into database
-    for metadata in calexp_metadata:
-        mdb.insert(metadata, table="calexp_qc")
-
-    # Clean up directories
-    for subdir in [calibdir, sciencedir, calexpdir]:
-        shutil.rmtree(subdir)
+        # Get calexp metadata and insert into database
+        calexp_metadata = butler_repo.get_calexp_metadata()
+        for metadata in calexp_metadata:
+            meta_database.insert(metadata, table=table)
 
 
 def generate_calib_data_quality(mdb,
