@@ -1,0 +1,4 @@
+setupRequired(pipe_tasks)
+setupRequired(pipe_drivers)
+envPrepend(PYTHONPATH ${PRODUCT_DIR}/src)
+envPrepend(PATH ${PRODUCT_DIR}/bin)
