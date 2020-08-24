@@ -1,3 +1,13 @@
+fits_header_mappings:
+  expTime: "EXPTIME"
+  ccdTemp: "CCD-TEMP"
+  expId: "IMAGEID"
+  taiObs: "DATE-OBS"
+  field: "FIELD"
+
+camera_mappings:
+  83F010774: 1
+
 ngas:
   server: localhost
   port: 7778
