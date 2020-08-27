@@ -8,13 +8,17 @@ services:
     network_mode: "host"
     stdin_open: true
     tty: true
+    ports:
+      - "9888:9888"
+      - "9889:9889"
+      - "9890:9890"
     volumes:
       - ${OBS_HUNTSMAN}:/opt/lsst/software/stack/obs_huntsman
       - ${HUNTSMAN_DRP}:/opt/lsst/software/stack/huntsman-drp
     environment:
       - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
       - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
-      - FIREFLY_URL
+      - FIREFLY_URL=http://${LOCAL_MACHINE_IP}:8080/firefly
   lsst_firefly:
     image: ipac/firefly:lsst-dev
     ports:
