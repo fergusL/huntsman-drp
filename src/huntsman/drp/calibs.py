@@ -1,7 +1,9 @@
 from dateutil.parser import parse as parse_date
 from huntsman.drp.meta import MetaDatabase
-
+from datetime import datetime
 import lsst.daf.persistence as dafPersist
+from lsst.pipe.drivers.constructCalibs import BiasTask, FlatTask
+from lsst.pipe.tasks.ingestCalibs import IngestCalibsTask
 from lsst.utils import getPackageDir
 
 
@@ -58,10 +60,10 @@ def constructHuntsmanBiases(data_dir,
     exposures = defaultdict(dict)
     for (ccd, exptime, dateobs, imageId) in metalist:
 
-        # Reject exposures outside of date range
-        # dateobs = parse_date(dateobs)
-        # if (dateobs < date_start) or (dateobs > date_end):
-        #    continue
+        Reject exposures outside of date range
+        dateobs = parse_date(dateobs)
+        if (dateobs < date_start) or (dateobs > date_end):
+            continue
 
         # Update the list of calibs we need
         if exptime not in exposures[ccd].keys():
@@ -92,7 +94,10 @@ def constructHuntsmanBiases(data_dir,
             cmd += f" --nodes {nodes} --procs {procs}"
             cmd += f" --calibId expTime={exptime} calibDate={date}"
             print(f'The command is: {cmd}')
-            subprocess.call(cmd, shell=True)
+            # subprocess.call(cmd, shell=True)
+            # rather than running as a subprocess, split cmd by spaces and
+            # supply the resulting list of strings to `parseAndRun`
+            BiasTask.parseAndRun(cmd.split()[1:])
 
     # Ingest the master calibs
     # TODO: Lookup the correct directory
@@ -105,7 +110,10 @@ def constructHuntsmanBiases(data_dir,
     cmd += " --config clobber=True"
     cmd += f" --configfile {config_file}"
     print(f'The ingest command is: {cmd}')
-    subprocess.call(cmd, shell=True)
+    # subprocess.call(cmd, shell=True)
+    # rather than running as a subprocess, split cmd by spaces and
+    # supply the resulting list of strings to `parseAndRun`
+    IngestCalibsTask.parseAndRun(cmd.split()[1:])
     # TODO: alert/log message when subprocess completes
 
 
@@ -188,7 +196,10 @@ def constructHuntsmanFlats(data_dir,
             cmd += f" --nodes {nodes} --procs {procs}"
             cmd += f" --calibId filter={filter} calibDate={date}"
             print(f'The command is: {cmd}')
-            subprocess.call(cmd, shell=True)
+            # subprocess.call(cmd, shell=True)
+            # rather than running as a subprocess, split cmd by spaces and
+            # supply the resulting list of strings to `parseAndRun`
+            FlatTask.parseAndRun(cmd.split()[1:])
 
     # Ingest the master calibs
     # TODO: Lookup the correct directory
@@ -201,12 +212,15 @@ def constructHuntsmanFlats(data_dir,
     cmd += " --config clobber=True"
     cmd += f" --configfile {config_file}"
     print(f'The ingest command is: {cmd}')
-    subprocess.call(cmd, shell=True)
+    # subprocess.call(cmd, shell=True)
+    # rather than running as a subprocess, split cmd by spaces and
+    # supply the resulting list of strings to `parseAndRun`
+    IngestCalibsTask.parseAndRun(cmd.split()[1:])
     # TODO: alert/log message when subprocess completes
 
 
-def make_recent_calibs(date,
-                       butler_directory,
+def make_recent_calibs(butler_directory,
+                       date=datetime.today().strftime('%Y-%m-%d'),
                        min_num_exposures=10,
                        date_range=7,
                        **kwargs):
@@ -215,17 +229,15 @@ def make_recent_calibs(date,
     specified date. Then saves the calib files to specified output directory.
     Parameters
     ----------
-    date : type str
-        Date specified in form yyyy-mm-dd
     butler_directory : str
         Directory containing the LSST butler database.
+    date : type str
+        Date specified in form yyyy-mm-dd, defaults to todays date.
     min_num_exposures : int
         Minimum numver of files needed to produce a master calib.
     date_range : int
         Number of days either side of specified date to search for useable
         calib data.
-    **kwargs : type
-        Description of parameter `**kwargs`.
     """
     # create a MetaDatabase instance
     db = MetaDatabase()
@@ -235,7 +247,7 @@ def make_recent_calibs(date,
     date_range = datetime.timedelta(days=date_range)
 
     db.retreive_files(output_dir,
-                      date_min=date_parsed-date_range,
-                      date_max=date_parsed-date_range)
+                      date_min=date_parsed - date_range,
+                      date_max=date_parsed - date_range)
     constructHuntsmanBiases(butler_directory, min_num_exposures, **kwargs)
     constructHuntsmanFlats(butler_directory, min_num_exposures, **kwargs)
