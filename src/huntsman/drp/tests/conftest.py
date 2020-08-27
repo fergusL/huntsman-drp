@@ -1,90 +1,81 @@
-
-from random import randint
 import os
+import pytest
+import numpy as np
 from astropy.io import fits
 
-from collections import OrderedDict
-from photutils.datasets import (make_gaussian_sources_image, make_noise_image,
-                                make_random_gaussians_table)
+from huntsman.drp.fitsutil import FitsHeaderTranslator
+from huntsman.drp.metadb import SimulatedMetaDatabase
+from huntsman.drp.butler import TemporaryButlerRepository
 
 
-def make_fake_image(temp_directory,
-                    file_name,
-                    num_images=1,
-                    n_sources=30,
-                    flux_range=[500, 1000],
-                    shape=(300, 500),
-                    background=0,
-                    stddev=1,
-                    xstddev_range=[1, 5],
-                    ystddev_range=[1, 5]):
-    """
-    Identical to photutils.datasets.make_100gaussians_image, except
-    makes an example image containing 30 2D Gaussians with the
-    positions determined by a input seed. The photutils version has a
-    hard-coded seed.
+IMAGES = [dict(dateObs='2020-08-21T09:30:00.000(UTC)', dataType='science'),
+          dict(dateObs='2020-08-21T09:30:00.000(UTC)', dataType='science', camera=2),
+          dict(dateObs='2020-08-20T09:30:00.000(UTC)', dataType='science'),
+          dict(dateObs='2020-08-20T09:30:00.000(UTC)', dataType='science', camera=2),
 
-    The background has a mean of 5 and a standard deviation of 2.
+          dict(dateObs='2020-08-21T08:30:00.000(UTC)', dataType='flat'),
+          dict(dateObs='2020-08-21T08:30:00.000(UTC)', dataType='flat', camera=2),
+          dict(dateObs='2020-08-20T08:30:00.000(UTC)', dataType='flat'),
+          dict(dateObs='2020-08-20T08:30:00.000(UTC)', dataType='flat', camera=2),
 
-    Parameters
-    ----------
-    seed : int
-        Integer to use as seed. If None is given, a random int will be
-        used instead.
+          dict(dateObs='2020-08-21T07:30:00.000(UTC)', dataType='bias'),
+          dict(dateObs='2020-08-21T07:30:00.000(UTC)', dataType='bias', camera=2),
+          dict(dateObs='2020-08-20T07:30:00.000(UTC)', dataType='bias'),
+          dict(dateObs='2020-08-20T07:30:00.000(UTC)', dataType='bias', camera=2)]
 
-    Returns
-    -------
-    image : `~numpy.ndarray`
-        Image containing Gaussian sources.
 
-    See Also
-    --------
-    make_4gaussians_image
+def make_test_data(filename, dateObs, dataType, camera=1, filter="g2", shape=(30, 50), bias=32,
+                   ra=100, dec=-30, exposure_time=30):
+    """Make fake FITS images with realistic headers."""
+    # Make the fake image data
+    if dataType == "science":
+        data = np.ones(shape) * bias * 5
+        data = np.random.poisson(data) + bias
+        field = "A Science Field"
+        image_type = "Light Frame"
+    elif dataType == "flat":
+        data = np.ones(shape, dtype="float32")
+        field = "Flat Field"
+        image_type = "Light Frame"
+    elif dataType == "bias":
+        data = bias * np.ones(shape, dtype="uint16")
+        field = "Dark Field"
+        image_type = "Dark Frame"
+    hdu = fits.PrimaryHDU(data)
+    # Add the header
+    hdu.header["RA"] = ra
+    hdu.header["dec"] = dec
+    hdu.header['EXPTIME'] = exposure_time
+    hdu.header['FILTER'] = filter
+    hdu.header['FIELD'] = field
+    hdu.header['DATE-OBS'] = dateObs
+    hdu.header["IMAGETYP"] = image_type
+    hdu.header["INSTRUME"] = f"TESTCAM{camera:02d}"
+    hdu.header["IMAGEID"] = "TestImageId"
+    # Write as a FITS file
+    hdu.writeto(filename, overwrite=True)
 
-    Examples
-    --------
-    .. plot::
-        :include-source:
 
-        from photutils import datasets
-        image = datasets.make_30gaussians_image()
-        plt.imshow(image, origin='lower', cmap='gray')
-    """
-    xmean_range = [0, shape[1]]
-    ymean_range = [0, shape[0]]
+@pytest.fixture(scope="session")
+def data_directory(tmp_path_factory):
+    """Create a temporary directory populated with fake FITS images."""
+    tempdir = tmp_path_factory.mktemp("testdata")
+    for i, image_dict in enumerate(IMAGES):
+        filename = os.path.join(tempdir, f"testdata_{i}.fits")
+        make_test_data(filename=filename, **image_dict)
+    return tempdir
 
-    param_ranges = OrderedDict([('amplitude', flux_range),
-                                ('x_mean', xmean_range),
-                                ('y_mean', ymean_range),
-                                ('x_stddev', xstddev_range),
-                                ('y_stddev', ystddev_range),
-                                ('theta', [0, 2 * 3.14])])
 
-    try:
-        os.makedirs(temp_directory)
-    except FileExistsError:
-        pass
+@pytest.fixture(scope="session")
+def metadatabase(data_directory):
+    return SimulatedMetaDatabase(data_directory=data_directory, data_info=IMAGES)
 
-    images = []
-    filenames = []
-    for num in range(0, num_images):
-        table = make_random_gaussians_table(
-            n_sources, param_ranges, random_state=randint(flux_range[0], flux_range[1]))
-        image1 = make_gaussian_sources_image(shape, table)
-        image2 = image1 + make_noise_image(shape, distribution='gaussian',
-                                           mean=background, stddev=stddev,
-                                           random_state=randint(flux_range[0], flux_range[1]))
-        hdu = fits.PrimaryHDU(image2)
-        hdu.header['EGAIN'] = 1.
-        hdu.header['EXPTIME'] = 1.
-        hdu.header['FILTER'] = 'g'
-        hdu.header['FIELD'] = 'test_target'
-        hdu.header['SBIG-ID'] = 'camera'
-        hdu.header['SEQID'] = 'sequence'
-        hdu.header['IMAGEID'] = str(num)
-        hdu.header['DATE-OBS'] = '2017-04-14T09:29:48.033(UTC)'
-        output_filename = os.path.join(str(temp_directory), '{}_{}.fits'.format(file_name, num))
-        hdu.writeto(output_filename, overwrite=True)
-        images.append(hdu)
-        filenames.append(output_filename)
-    return images, filenames
+
+@pytest.fixture(scope="session")
+def fits_header_translator():
+    return FitsHeaderTranslator()
+
+
+@pytest.fixture(scope="function")
+def temp_butler_repo():
+    return TemporaryButlerRepository()

@@ -1,6 +1,7 @@
 """
 
 """
+from copy import copy
 from functools import partial
 from huntsman.drp.base import HuntsmanBase
 
@@ -13,13 +14,16 @@ class FitsHeaderTranslator(HuntsmanBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # LSST also uses config, so rename
+        self.huntsman_config = copy(self.config)
+        self.config = None
         # Define direct mappings between fits headers and variable names
-        keyword_mapping = self.config["fits_header_mappings"]
+        keyword_mapping = self.huntsman_config["fits_header_mappings"]
         for varname, header_key in keyword_mapping.items():
             funcname = f"translate_{varname}"
             if hasattr(self, funcname):
                 raise AttributeError(f"Attribute {funcname} already set in {self}.")
-            setattr(self, funcname, partial(self._map_header_key(header_key=header_key)))
+            setattr(self, funcname, partial(self._map_header_key, header_key=header_key))
 
     def translate_dataType(self, md):
         """Translate FITS header into dataType: bias, flat or science."""
@@ -72,7 +76,7 @@ class FitsHeaderTranslator(HuntsmanBase):
     def translate_ccd(self, md):
         """Get a unique integer corresponding to the CCD."""
         ccd_name = md["INSTRUME"]
-        return self.config["camera_mappings"][ccd_name]
+        return int(self.huntsman_config["camera_mappings"][ccd_name])
 
     def _map_header_key(self, md, header_key):
         """Generic function to translate header_key to variable."""

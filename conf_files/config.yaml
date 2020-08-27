@@ -6,6 +6,8 @@ fits_header_mappings:
   field: "FIELD"
 
 camera_mappings:
+  TESTCAM01: 1
+  TESTCAM02: 2
   83F010774: 1
 
 ngas:

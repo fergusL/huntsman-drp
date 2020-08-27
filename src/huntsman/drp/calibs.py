@@ -48,8 +48,7 @@ def constructHuntsmanBiases(data_dir,
     config_file = os.path.join(getPackageDir("obs_huntsman"), "config",
                                "ingestBiases.py")
     # Create the Bulter object
-    butler = dafPersist.Butler(inputs=os.path.join(os.environ['LSST_HOME'],
-                                                   datadir))
+
     # Query butler for dark exposures
     # TODO: Replace visit with imageId
     metalist = butler.queryMetadata('raw',

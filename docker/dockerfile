@@ -4,7 +4,7 @@ FROM ${base_image}
 ENV LSST_HOME /opt/lsst/software/stack
 
 USER root
-RUN yum install -y wget && \
+RUN yum install -y wget vim && \
   #Install git-LFS
   export GITLFS=git-lfs-linux-amd64-v2.10.0.tar.gz && \
   cd "${LSST_HOME}/_build" && \
