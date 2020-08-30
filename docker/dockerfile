@@ -26,5 +26,7 @@ RUN yum install -y wget vim && \
   pip install ipython
 
 WORKDIR ${LSST_HOME}
-ADD startup.sh .
-CMD ["sh", "./startup.sh"]
+ADD bash_config.sh .
+RUN cat bash_config.sh >> ~/.bashrc
+ADD run_tests.sh .
+CMD ["/bin/bash"]

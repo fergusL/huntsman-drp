@@ -1,12 +1,13 @@
 """Unit tests for calibration data.
 """
 import pytest
+from huntsman.drp.dataquality import get_simple_image_data_stats
 #from .conftest import make_fake_image
 #from ..utils import get_simple_image_data_stats
 
 
-@pytest.fixture
-def fits_filename_list(tmpdir):
+@pytest.fixture(scope="module")
+def fits_filename_list(metadatabase):
     """A fixture for generating a list of newly-created
     fake fits image calibration data.
 
@@ -16,9 +17,11 @@ def fits_filename_list(tmpdir):
     Returns:
         list(str): List of fits filenames.
     """
-    flatfilenames = make_fake_image(tmpdir, 'flat', num_images=1, background=10000)[1]
-    darkfilenames = make_fake_image(tmpdir, 'dark', num_images=1, n_sources=0, background=5)[1]
-    return(flatfilenames + darkfilenames)
+    meta_flat = metadatabase.query(dataType="flat")
+    meta_bias = metadatabase.query(dataType="bias")
+    filenames_flat = [m["filename"] for m in meta_flat]
+    filenames_dark = [m["filename"] for m in meta_bias]
+    return(filenames_flat + filenames_dark)
 
 
 @pytest.mark.skip

@@ -1,20 +1,16 @@
-from dateutil.parser import parse as parse_date
-from huntsman.drp.meta import MetaDatabase
+import os
 from datetime import datetime
-import lsst.daf.persistence as dafPersist
+from dateutil.parser import parse as parse_date
+from collections import defaultdict
+
 from lsst.pipe.drivers.constructCalibs import BiasTask, FlatTask
 from lsst.pipe.tasks.ingestCalibs import IngestCalibsTask
 from lsst.utils import getPackageDir
 
 
-def constructHuntsmanBiases(data_dir,
-                            min_num_exposures,
-                            datadir='DATA',
-                            calibdir='DATA/CALIB',
-                            rerun='processCcdOutputs',
-                            nodes=1,
-                            procs=1,
-                            validity=1000):
+def constructHuntsmanBiases(date, butler, min_num_exposures, datadir='DATA', calibdir='DATA/CALIB',
+                            rerun='processCcdOutputs', nodes=1, procs=1, validity=1000,
+                            timedelta=None):
     """Construct biases.
 
     Parameters
@@ -59,10 +55,11 @@ def constructHuntsmanBiases(data_dir,
     exposures = defaultdict(dict)
     for (ccd, exptime, dateobs, imageId) in metalist:
 
-        Reject exposures outside of date range
+        # Reject exposures outside of date range
         dateobs = parse_date(dateobs)
-        if (dateobs < date_start) or (dateobs > date_end):
-            continue
+        if timedelta is not None:
+            if abs(dateobs-date) > timedelta:
+                continue
 
         # Update the list of calibs we need
         if exptime not in exposures[ccd].keys():
@@ -77,7 +74,7 @@ def constructHuntsmanBiases(data_dir,
 
             if n_exposures < min_num_exposures:
                 print(f'Not enough exposures for {exptime}s biases on ccd'
-                      f' {ccd} ({n_exposures} of {min_exposures}).')
+                      f' {ccd} ({n_exposures} of {min_num_exposures}).')
                 continue
 
             print(f'Making master biases for ccd {ccd} using {n_exposures}'
@@ -91,7 +88,7 @@ def constructHuntsmanBiases(data_dir,
             cmd += f" --id visit={'^'.join([f'{id}' for id in image_ids])}"
             cmd += f" expTime={exptime}"
             cmd += f" --nodes {nodes} --procs {procs}"
-            cmd += f" --calibId expTime={exptime} calibDate={date}"
+            cmd += f" --calibId expTime={exptime} calibDate={dateobs}"
             print(f'The command is: {cmd}')
             # subprocess.call(cmd, shell=True)
             # rather than running as a subprocess, split cmd by spaces and
@@ -103,7 +100,7 @@ def constructHuntsmanBiases(data_dir,
     # TODO: maybe this should be a separate function?
     print(f"Ingesting master bias frames.")
     cmd = f"ingestCalibs.py {datadir}"
-    cmd += f" {datadir}/rerun/{rerun}/calib/bias/{date}/*/*.fits"
+    cmd += f" {datadir}/rerun/{rerun}/calib/bias/{dateobs}/*/*.fits"
     cmd += f" --validity {validity}"
     cmd += f" --calib {calibdir} --mode=link"
     cmd += " --config clobber=True"
@@ -116,14 +113,9 @@ def constructHuntsmanBiases(data_dir,
     # TODO: alert/log message when subprocess completes
 
 
-def constructHuntsmanFlats(data_dir,
-                           min_num_exposures,
-                           datadir='DATA',
-                           calibdir='DATA/CALIB',
-                           rerun='processCcdOutputs',
-                           nodes=1,
-                           procs=1,
-                           validity=1000):
+def constructHuntsmanFlats(date, butler, min_num_exposures, datadir='DATA', calibdir='DATA/CALIB',
+                           rerun='processCcdOutputs', nodes=1, procs=1, validity=1000,
+                           timedelta=None):
     """Construct flats.
 
     Parameters
@@ -147,15 +139,12 @@ def constructHuntsmanFlats(data_dir,
     validity : int
         Calibration validity period in days.
     """
-    config_file = os.path.join(getPackageDir("obs_huntsman"), "config",
-                               "ingestFlats.py")
+    config_file = os.path.join(getPackageDir("obs_huntsman"), "config", "ingestFlats.py")
     # Create the Bulter object
-    butler = dafPersist.Butler(inputs=os.path.join(os.environ['LSST_HOME'],
-                                                   datadir))
+
     # Query butler for dark exposures
     # TODO: Replace visit with expId
-    metalist = butler.queryMetadata('raw',
-                                    ['ccd', 'filter', 'dateObs', 'expId'],
+    metalist = butler.queryMetadata('raw', ['ccd', 'filter', 'dateObs', 'expId'],
                                     dataId={'dataType': 'flat'})
 
     # Select the exposures we are interested in
@@ -164,8 +153,9 @@ def constructHuntsmanFlats(data_dir,
 
         # Reject exposures outside of date range
         dateobs = parse_date(dateobs)
-        if (dateobs < date_start) or (dateobs > date_end):
-            continue
+        if timedelta is not None:
+            if abs(dateobs-date) > timedelta:
+                continue
 
         # Update the list of calibs we need
         if filter not in exposures[ccd].keys():
@@ -178,9 +168,9 @@ def constructHuntsmanFlats(data_dir,
 
             n_exposures = len(exp_ids)
 
-            if n_exposures < min_exposures:
+            if n_exposures < min_num_exposures:
                 print(f'Not enough exposures for flats in {filter} filter on'
-                      f' ccd {ccd} ({n_exposures} of {min_exposures}).')
+                      f' ccd {ccd} ({n_exposures} of {min_num_exposures}).')
                 continue
 
             print(f'Making master flats for ccd {ccd} using {n_exposures}'
@@ -193,7 +183,7 @@ def constructHuntsmanFlats(data_dir,
             cmd += " dataType='flat'"  # TODO: remove
             cmd += f" filter={filter}"
             cmd += f" --nodes {nodes} --procs {procs}"
-            cmd += f" --calibId filter={filter} calibDate={date}"
+            cmd += f" --calibId filter={filter} calibDate={dateobs}"
             print(f'The command is: {cmd}')
             # subprocess.call(cmd, shell=True)
             # rather than running as a subprocess, split cmd by spaces and
@@ -205,7 +195,7 @@ def constructHuntsmanFlats(data_dir,
     # TODO: maybe this should be a separate function?
     print(f"Ingesting master {filter} filter flats frames for ccd {ccd}.")
     cmd = f"ingestCalibs.py {datadir}"
-    cmd += f" {datadir}/rerun/{rerun}/calib/flat/{date}/*/*.fits"
+    cmd += f" {datadir}/rerun/{rerun}/calib/flat/{dateobs}/*/*.fits"
     cmd += f" --validity {validity}"
     cmd += f" --calib {calibdir} --mode=link"
     cmd += " --config clobber=True"
@@ -218,7 +208,7 @@ def constructHuntsmanFlats(data_dir,
     # TODO: alert/log message when subprocess completes
 
 
-def make_recent_calibs(butler_directory,
+def make_recent_calibs(butler,
                        date=datetime.today().strftime('%Y-%m-%d'),
                        min_num_exposures=10,
                        date_range=7,
@@ -238,15 +228,10 @@ def make_recent_calibs(butler_directory,
         Number of days either side of specified date to search for useable
         calib data.
     """
-    # create a MetaDatabase instance
-    db = MetaDatabase()
     # retrieve desired files and place in a tmp directory
     # TODO something to setup tmp directories
-    date_parsed = parse_date(date)
-    date_range = datetime.timedelta(days=date_range)
-
-    db.retreive_files(output_dir,
-                      date_min=date_parsed - date_range,
-                      date_max=date_parsed - date_range)
-    constructHuntsmanBiases(butler_directory, min_num_exposures, **kwargs)
-    constructHuntsmanFlats(butler_directory, min_num_exposures, **kwargs)
+    date = parse_date(date)
+    timedelta = datetime.timedelta(days=date_range)
+    kwargs = dict(date=date, timedaelta=timedelta, min_num_exposures=min_num_exposures, **kwargs)
+    constructHuntsmanBiases(butler, **kwargs)
+    constructHuntsmanFlats(butler, **kwargs)

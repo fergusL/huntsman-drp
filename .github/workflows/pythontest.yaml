@@ -1,0 +1,48 @@
+name: Test Python
+
+on: [push, pull_request]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v1
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+  test:
+    needs: lint
+    env:
+      HUNTSMAN_DRP: ${{ github.workspace }}/huntsman-drp
+      OBS_HUNTSMAN: ${{ github.workspace }}/obs_huntsman
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8]
+    steps:
+      - name: Checkout huntsman-drp
+        uses: actions/checkout@v2
+        with:
+          path: huntsman-drp
+      - name: Checkout obs_huntsman
+        uses: actions/checkout@v2
+        with:
+          repository: AstroHuntsman/obs_huntsman
+          path: obs_huntsman
+      - name: Build docker image
+        working-directory: ${{ env.HUNTSMAN_DRP }}/docker
+        run: docker-compose build
+      - name: Test with pytest in huntsman-drp container
+        working-directory: ${{ env.HUNTSMAN_DRP }}/docker
+        run: docker-compose run lsst_stack ./run_tests.sh

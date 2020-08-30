@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 
 import lsst.daf.persistence as dafPersist
 from huntsman.drp.lsst_tasks import ingest_raw_data
+from huntsman.drp.calibs import make_recent_calibs
 
 
 class TemporaryButlerRepository():

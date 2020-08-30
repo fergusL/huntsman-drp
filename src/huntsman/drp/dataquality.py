@@ -1,6 +1,8 @@
-from huntsman.drp.metadatabase import MetaDatabase
-from huntsman.drp.calibs import make_recent_calibs
+from astropy import stats
+import astropy.io.fits as fits
 
+from huntsman.drp.metadb import MetaDatabase
+from huntsman.drp.butler import TemporaryButlerRepository
 
 
 def generate_science_data_quality(meta_database=None, table="calexp_qc"):
@@ -18,7 +20,7 @@ def generate_science_data_quality(meta_database=None, table="calexp_qc"):
     filenames = meta_database.query_recent_files()
 
     # Create a new butler repo in temp directory
-    with TemporaryButler() as butler_repo:
+    with TemporaryButlerRepository() as butler_repo:
 
         # Ingest raw data
         butler_repo.ingest_raw_data(filenames)
@@ -33,6 +35,23 @@ def generate_science_data_quality(meta_database=None, table="calexp_qc"):
         calexp_metadata = butler_repo.get_calexp_metadata()
         for metadata in calexp_metadata:
             meta_database.insert(metadata, table=table)
+
+
+def get_simple_image_data_stats(filename_list):
+    """Return a dictionary of simple stats for all
+    fits filenames in the input list.
+
+    Args:
+        filename_list (list): List of fits filenames.
+
+    Returns:
+        dict: mean, median, stdev for each fits file
+    """
+    output_data_quality_dict = {}
+    for filename in filename_list:
+        mean, median, stdev = stats.sigma_clipped_stats(fits.getdata(filename))
+        output_data_quality_dict[filename] = (mean, median, stdev)
+    return(output_data_quality_dict)
 
 
 def generate_calib_data_quality(mdb,

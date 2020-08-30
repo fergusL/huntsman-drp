@@ -70,6 +70,10 @@ class AbstractMetaDatabase(ABC):
         return True
 
 
+class MetaDatabase():
+    pass
+
+
 class SimulatedMetaDatabase(AbstractMetaDatabase):
     """A simulated meta database for testing purposes. Should be replaced by simulated mongodb
     in future."""
