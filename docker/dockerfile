@@ -21,12 +21,11 @@ RUN yum install -y wget vim && \
   touch ~/.git-credentials && \
   echo "https://:@lsst-sqre-prod-git-lfs.s3-us-west-2.amazonaws.com" >> ~/.git-credentials && \
   echo "https://:@s3.lsst.codes" >> ~/.git-credentials && \
-  # Install ipython into LSST conda env
+  # Install extra python stuff into LSST conda env
   . ${LSST_HOME}/loadLSST.bash && \
-  pip install ipython
+  pip install ipython pymongo
 
 WORKDIR ${LSST_HOME}
 ADD bash_config.sh .
 RUN cat bash_config.sh >> ~/.bashrc
-ADD run_tests.sh .
 CMD ["/bin/bash"]

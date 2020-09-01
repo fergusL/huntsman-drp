@@ -1,23 +1,23 @@
 from astropy import stats
 import astropy.io.fits as fits
 
-from huntsman.drp.metadb import MetaDatabase
+from huntsman.drp.datatable import RawDataTable
 from huntsman.drp.butler import TemporaryButlerRepository
 
 
-def generate_science_data_quality(meta_database=None, table="calexp_qc"):
+def generate_science_data_quality(data_table=None, table="calexp_qc"):
     """
     Generate metadata for science data.
 
     Args:
-        meta_database (huntsman.drp.MetaDatabase, optional): The meta database object.
+        data_table (huntsman.drp.MetaDatabase, optional): The DataTable object.
         table (str, optional): The table in which to insert the resulting metadata.
     """
-    if meta_database is None:
-        meta_database = MetaDatabase()
+    if data_table is None:
+        data_table = RawDataTable()
 
     # Get filenames of science data to process
-    filenames = meta_database.query_recent_files()
+    filenames = data_table.query_recent_files()
 
     # Create a new butler repo in temp directory
     with TemporaryButlerRepository() as butler_repo:
@@ -34,7 +34,7 @@ def generate_science_data_quality(meta_database=None, table="calexp_qc"):
         # Get calexp metadata and insert into database
         calexp_metadata = butler_repo.get_calexp_metadata()
         for metadata in calexp_metadata:
-            meta_database.insert(metadata, table=table)
+            data_table.insert_one(metadata)
 
 
 def get_simple_image_data_stats(filename_list):

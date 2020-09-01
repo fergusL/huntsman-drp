@@ -4,6 +4,6 @@ source ~/.bashrc
 set -eu
 
 cd ${HUNTSMAN_DRP}/src/huntsman/drp
-pytest -xv
+pytest -xv --log-cli-level=DEBUG
 
 exit 0

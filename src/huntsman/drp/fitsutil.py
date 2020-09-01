@@ -1,15 +1,12 @@
-"""
-
-"""
 from copy import copy
 from functools import partial
 from huntsman.drp.base import HuntsmanBase
 
 
-class FitsHeaderTranslator(HuntsmanBase):
+class FitsHeaderTranslatorBase(HuntsmanBase):
     """
     Class used to map information in FITS headers to variables required by the DRP.
-    Is used as a base class for `obs_huntsman.HuntsmanParseTask`.
+    Is used as a base class for `obs_huntsman.HuntsmanParseTask` and `FitsHeaderTranslator`.
     """
 
     def __init__(self, **kwargs):
@@ -18,7 +15,7 @@ class FitsHeaderTranslator(HuntsmanBase):
         self.huntsman_config = copy(self.config)
         self.config = None
         # Define direct mappings between fits headers and variable names
-        keyword_mapping = self.huntsman_config["fits_header_mappings"]
+        keyword_mapping = self.huntsman_config["fits_header"]["mappings"]
         for varname, header_key in keyword_mapping.items():
             funcname = f"translate_{varname}"
             if hasattr(self, funcname):
@@ -81,3 +78,24 @@ class FitsHeaderTranslator(HuntsmanBase):
     def _map_header_key(self, md, header_key):
         """Generic function to translate header_key to variable."""
         return md[header_key]
+
+
+class FitsHeaderTranslator(FitsHeaderTranslatorBase):
+    """Add additional methods here to avoid conflicts with LSST stack."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = self.huntsman_config
+
+    def parse_header(self, header):
+        """
+        Parse header key/values into standardised python variables.
+
+        Args:
+            header (dict): Raw FITS header.
+        """
+        required_columns = self.config["fits_header"]["required_columns"]
+        result = dict()
+        for column in required_columns:
+            result[column] = getattr(self, f"translate_{column}")(header)
+        return result

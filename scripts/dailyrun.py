@@ -2,7 +2,7 @@
 """
 from dateutil.parser import parse as parse_date
 import datetime
-from huntsman.drp.metadb import MetaDatabase
+from huntsman.drp.datatable import MetaDatabase
 import argparse
 
 from huntsman.drp.dataquality import (generate_science_data_quality,

@@ -1,9 +1,21 @@
-fits_header_mappings:
-  expTime: "EXPTIME"
-  ccdTemp: "CCD-TEMP"
-  expId: "IMAGEID"
-  taiObs: "DATE-OBS"
-  field: "FIELD"
+fits_header:
+  mappings:
+    expTime: "EXPTIME"
+    ccdTemp: "CCD-TEMP"
+    expId: "IMAGEID"
+    taiObs: "DATE-OBS"
+    field: "FIELD"
+  required_columns:
+    - "expTime"
+    - "taiObs"
+    - "field"
+    - "expId"
+    - "ccdTemp"
+    - "dateObs"
+    - "dataType"
+    - "filter"
+    - "visit"
+    - "ccd"
 
 camera_mappings:
   TESTCAM01: 1
@@ -13,6 +25,13 @@ camera_mappings:
 ngas:
   server: localhost
   port: 7778
+
+mongodb:
+  hostname: "localhost"
+  port: 27017
+  db_name: "huntsman"
+  tables:
+    raw_data: "raw_data"
 
 refcat:
   tap_url: http://api.skymapper.nci.org.au/aus/tap/

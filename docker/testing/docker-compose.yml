@@ -1,0 +1,24 @@
+version: '3'
+services:
+  mongo:
+    image: mongo:latest
+    restart: always
+    ports:
+      - 27017:27017
+    logging:
+        driver: none
+  python_tests:
+    image: huntsmanarray/drp:develop
+    build:
+      context: "${HUNTSMAN_DRP}/docker"
+    user: root
+    network_mode: "host"
+    stdin_open: true
+    tty: true
+    volumes:
+      - ${OBS_HUNTSMAN}:/opt/lsst/software/stack/obs_huntsman
+      - ${HUNTSMAN_DRP}:/opt/lsst/software/stack/huntsman-drp
+    environment:
+      - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
+      - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
+    command: /opt/lsst/software/stack/huntsman-drp/scripts/run_tests.sh
