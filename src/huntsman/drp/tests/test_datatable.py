@@ -1,4 +1,4 @@
-from astropy.io import fits
+from huntsman.drp.fitsutil import read_fits_header
 from huntsman.drp.utils import parse_date
 
 
@@ -15,7 +15,7 @@ def test_query_by_date(raw_data_table, fits_header_translator):
         n_files = len(filenames)
         for filename in filenames:
             # Assert date is within expected range
-            header = fits.getheader(filename)
+            header = read_fits_header(filename)
             date = parse_date(fits_header_translator.translate_dateObs(header))
             assert date >= date_min
             assert date < date_max

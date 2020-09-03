@@ -1,4 +1,4 @@
-![Python Tests](https://github.com/danjampro/huntsman-drp/workflows/Python%20Tests/badge.svg?branch=develop)
+![Python Tests](https://github.com/AstroHuntsman/huntsman-drp/workflows/Python%20Tests/badge.svg?branch=develop)
 ![Docker CI](https://github.com/AstroHuntsman/huntsman-drp/workflows/Docker%20CI/badge.svg)
 
 # huntsman-drp

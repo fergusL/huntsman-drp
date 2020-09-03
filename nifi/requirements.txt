@@ -1,0 +1,4 @@
+# Requirements file for huntsman-drp NiFi.
+-e git+https://github.com/AstroHuntsman/huntsman-drp.git@develop#egg=huntsman.drp
+astropy >= 4.0
+pyyaml == 5.3.1
