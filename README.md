@@ -12,5 +12,5 @@ docker-compose up
 ```
 When the tests have finished, be sure to type:
 ```
-docker-compose down.
+docker-compose down
 ```
