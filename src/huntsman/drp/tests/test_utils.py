@@ -1,9 +1,11 @@
 """Unit tests for calibration data.
 """
 import pytest
+from datetime import datetime
+
 from huntsman.drp.dataquality import get_simple_image_data_stats
-#from .conftest import make_fake_image
-#from ..utils import get_simple_image_data_stats
+from huntsman.drp.fitsutil import read_fits_header
+from huntsman.drp.utils import parse_date
 
 
 @pytest.fixture(scope="module")
@@ -38,3 +40,12 @@ def test_get_simple_image_data_stats(fits_filename_list):
             assert data_quality_dict[k][0] == pytest.approx(10000, 10)
         else:
             assert data_quality_dict[k][0] == pytest.approx(5, 2)
+
+
+def test_read_fits_header_bad_extension():
+    with pytest.raises(ValueError):
+        read_fits_header('bogus_file.lala')
+
+
+def test_parse_date_datetime():
+    parse_date(datetime.today())

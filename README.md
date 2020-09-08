@@ -10,7 +10,14 @@ To run tests locally, ensure that the `HUNTSMAN_DRP` and `OBS_HUNTSMAN` environm
 cd $HUNTSMAN_DRP/docker/testing
 docker-compose up
 ```
-When the tests have finished, be sure to type:
+When the tests have finished, you might need to ``ctrl+c`` cancel the test script. 
+
+When finished testing, be sure to type the following to shut down the docker containers:
 ```
 docker-compose down
+```
+
+You can view an html coverage report after the tests complete using the following on OSX:
+```
+open ../../src/huntsman/drp/htmlcov/index.html
 ```
