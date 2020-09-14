@@ -15,6 +15,8 @@ services:
     volumes:
       - ${OBS_HUNTSMAN}:/opt/lsst/software/stack/obs_huntsman
       - ${HUNTSMAN_DRP}:/opt/lsst/software/stack/huntsman-drp
+      - ${OBS_HUNTSMAN_TESTDATA}:/opt/lsst/software/stack/testdata
+      - ${DATA}:/opt/lsst/software/stack/DATA
     environment:
       - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
       - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
