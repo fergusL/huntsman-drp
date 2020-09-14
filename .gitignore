@@ -105,4 +105,4 @@ venv.bak/
 .mypy_cache/
 
 # config
-config/*._local*
+conf_files/*_local*

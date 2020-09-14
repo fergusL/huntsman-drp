@@ -7,8 +7,8 @@ from huntsman.drp.fitsutil import read_fits_header, FitsHeaderTranslator
 
 
 def main(filename, print_stdout=True):
-    """Print to stdout FitsHeaderTranslator-parsed fits header 
-    for use in nifi data archive system. 
+    """Print to stdout FitsHeaderTranslator-parsed fits header
+    for use in nifi data archive system.
 
     Args:
         filename (str): Filename of fits file. Can be compressed.
