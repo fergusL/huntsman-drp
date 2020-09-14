@@ -2,6 +2,8 @@ version: '3'
 services:
   lsst_stack:
     image: huntsmanarray/drp:develop
+    logging:
+      driver: "none"
     build:
       context: "${HUNTSMAN_DRP}/docker"
     user: root
@@ -16,14 +18,14 @@ services:
       - ${OBS_HUNTSMAN}:/opt/lsst/software/stack/obs_huntsman
       - ${HUNTSMAN_DRP}:/opt/lsst/software/stack/huntsman-drp
       - ${OBS_HUNTSMAN_TESTDATA}:/opt/lsst/software/stack/testdata
-      - ${DATA}:/opt/lsst/software/stack/DATA
+      - ${BUTLER_DIRECTORY}:/opt/lsst/software/stack/DATA
     environment:
       - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
       - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
-      - FIREFLY_URL=http://${LOCAL_MACHINE_IP}:8080/firefly
-  lsst_firefly:
-    image: ipac/firefly:lsst-dev
-    ports:
-      - "8080:8080"
-    environment:
-      - "MAX_JVM_SIZE=8G"
+#      - FIREFLY_URL=http://${LOCAL_MACHINE_IP}:8080/firefly
+#  lsst_firefly:
+#    image: ipac/firefly:lsst-dev
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      - "MAX_JVM_SIZE=8G"
