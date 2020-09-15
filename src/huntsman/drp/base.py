@@ -38,7 +38,11 @@ class HuntsmanBase():
 
     def _load_config(self, config_dir=None):
         """Load the config file"""
-        dir = os.path.join(os.environ["HUNTSMAN_DRP"], "conf_files")
+        try:
+            dir = os.path.join(os.environ["HUNTSMAN_DRP"], "conf_files")
+        except KeyError as err:
+            self.logger.error("HUNTSMAN_DRP environment variable not set. Exiting.")
+            raise err
         config = _load_yaml(os.path.join(dir, "config.yaml"))
         # Update the config with local version
         try:

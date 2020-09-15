@@ -44,7 +44,7 @@ class FitsHeaderTranslatorBase(HuntsmanBase):
         if md['IMAGETYP'] == 'Light Frame':
             # The FIELD keyword is set by pocs.observation.field.field_name.
             # For flat fields, this is "Flat Field"
-            if md["FIELD"].startswith("Flat Field"):
+            if md["FIELD"].startswith("Flat"):
                 dataType = 'flat'
             else:
                 dataType = 'science'
