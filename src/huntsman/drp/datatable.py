@@ -54,13 +54,22 @@ class DataTable(HuntsmanBase):
         """
         query_dict = kwargs.copy()
         if (date_start is not None) or (date_end is not None):
+            # TODO - reinstate this code once nifi ingests proper dates
+            """
             date_dict = {}
             if date_start is not None:
                 date_dict["$gte"] = parse_date(date_start)
             if date_end is not None:
                 date_dict["$lt"] = parse_date(date_end)
             query_dict[self._date_key] = date_dict
+            """
         result = list(self._table.find(query_dict))
+        # Apply date range manually
+        # TODO remove this in favour of the above
+        if date_start is not None:
+            result = [r for r in result if parse_date(r[self._date_key]) >= parse_date(date_start)]
+        if date_end is not None:
+            result = [r for r in result if parse_date(r[self._date_key]) < parse_date(date_end)]
         self.logger.debug(f"Query returned {len(result)} results.")
         return result
 
