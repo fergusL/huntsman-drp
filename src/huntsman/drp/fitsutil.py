@@ -35,8 +35,6 @@ class FitsHeaderTranslatorBase(HuntsmanBase):
         keyword_mapping = self.huntsman_config["fits_header"]["mappings"]
         for varname, header_key in keyword_mapping.items():
             funcname = f"translate_{varname}"
-            if hasattr(self, funcname):
-                raise AttributeError(f"Attribute {funcname} already set in {self}.")
             setattr(self, funcname, partial(self._map_header_key, header_key=header_key))
 
     def translate_dataType(self, md):
@@ -56,13 +54,6 @@ class FitsHeaderTranslatorBase(HuntsmanBase):
             raise NotImplementedError(f'IMAGETYP value not recongnised: '
                                       f"{md['IMAGETYP']}")
         return dataType
-
-    def translate_filter(self, md):
-        """
-        Translate the given filter name to the abstract filter name.
-        For Huntsman, we strip of the serial number.
-        """
-        return "_".join(md["FILTER"].split("_")[:-1])
 
     def translate_dateObs(self, md):
         """Return the date of observation as a string."""

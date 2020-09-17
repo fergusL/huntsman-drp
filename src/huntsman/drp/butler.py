@@ -23,20 +23,50 @@ class ButlerRepository(HuntsmanBase):
         if initialise:
             self._initialise()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        pass
+
     @property
     def calib_directory(self):
         return self._calib_directory
 
     def ingest_raw_data(self, filenames, **kwargs):
-        """Ingest raw data into the repository."""
+        """
+        Ingest raw data into the repository.
+
+        Args:
+            filenames (iterable of str): The list of raw data filenames.
+        """
         self.logger.debug(f"Ingesting {len(filenames)} files.")
         lsst.ingest_raw_data(filenames, butler_directory=self.butler_directory, **kwargs)
+
         # For some reason we need to make a new butler object...
         self.butler = dafPersist.Butler(inputs=self.butler_directory)
 
-    def make_master_calibs(self, calib_date, rerun, **kwargs):
-        """Make master calibs from ingested raw calibs."""
-        self.make_master_biases(calib_date, rerun, **kwargs)
+    def ingest_reference_catalogue(self, filenames):
+        """
+        Ingest the reference catalogue into the repository.
+
+        Args:
+            filenames (iterable of str): The list of filenames containing reference data.
+        """
+        self.logger.debug(f"Ingesting reference catalogue from {len(filenames)} files.")
+        lsst.ingest_reference_catalogue(self.butler_directory, filenames)
+
+    def make_master_calibs(self, calib_date, rerun, skip_bias=False, **kwargs):
+        """
+        Make master calibs from ingested raw calibs.
+
+        Args:
+            calib_date (object): The calib date to assign to the master calibs.
+            rerun (str): The name of the rerun.
+            skip_bias (bool, optional): Skip creation of master biases? Default False.
+        """
+        if not skip_bias:
+            self.make_master_biases(calib_date, rerun, **kwargs)
         self.make_master_flats(calib_date, rerun, **kwargs)
 
     def make_master_biases(self, calib_date, rerun, nodes=1, procs=1, ingest=True):
@@ -106,9 +136,31 @@ class ButlerRepository(HuntsmanBase):
         lsst.ingest_master_flats(calib_date, self.butler_directory, self.calib_directory, rerun,
                                  validity=validity)
 
-    def make_calexps(self):
-        """Make calibrated science exposures (calexps) from ingested raw data."""
-        pass
+    def make_calexps(self, filter_name, rerun):
+        """Make calibrated science exposures (calexps) by running `processCcd.py`.
+
+        Args:
+            filter_name (str): The filter name.
+            rerun (str): The rerun name.
+        """
+        self.logger.debug(f"Making calexps for {filter_name} filter.")
+        lsst.processCcd(self.butler_directory, self.calib_directory,
+                        rerun=rerun, filter_name=filter_name)
+
+    def make_coadd(self, filter_names, rerun):
+        """
+        Produce a coadd image.
+        Args:
+            filter_names (iterable of str): Iterable of filter names to make coadds with.
+            rerun (str): Name of rerun.
+        """
+        lsst.makeDiscreteSkyMap(butler_directory=self.butler_directory, rerun=f'{rerun}:coadd')
+        for filter_name in filter_names:
+            self.logger.debig(f"Making coadd in {filter_name} filter.")
+            lsst.makeCoaddTempExp(filter_name, butler_directory=self.butler_directory,
+                                  calib_directory=self.calib_directory, rerun=f'{rerun}:coadd')
+            lsst.assembleCoadd(filter_name, butler_directory=self.butler_directory,
+                               calib_directory=self.calib_directory, rerun=f'{rerun}:coadd')
 
     def get_calexp_metadata(self):
         """Get calibrated science exposure (calexp) metadata"""

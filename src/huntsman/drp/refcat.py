@@ -26,23 +26,27 @@ class TapReferenceCatalogue(HuntsmanBase):
         # Create the tap object
         self._tap = TapPlus(url=self._tap_url)
 
-    def cone_search(self, ra, dec, filename):
+    def cone_search(self, ra, dec, filename, radius_degrees=None):
         """
         Query the reference catalogue, saving output to a .csv file.
 
         Args:
-            ra: RA of the centre of the cone search in J2000 degrees.
-            dec: Dec of the centre of the cone search in J2000 degrees.
-            filename: Filename of the returned .csv file.
+            ra (float): RA of the centre of the cone search in J2000 degrees.
+            dec (float): Dec of the centre of the cone search in J2000 degrees.
+            filename (str): Filename of the returned .csv file.
+            radius_degrees (float, optional): Override search radius from config.
 
         Returns:
             pandas.DataFrame: The source catalogue.
         """
+        if radius_degrees is None:
+            radius_degrees = self._cone_search_radius
+
         query = f"SELECT * FROM {self._tap_table}"
 
         # Apply cone search
         query += (f" WHERE 1=CONTAINS(POINT('ICRS', {self._ra_key}, {self._dec_key}),"
-                  f" CIRCLE('ICRS', {ra}, {dec}, {self._cone_search_radius}))")
+                  f" CIRCLE('ICRS', {ra}, {dec}, {radius_degrees}))")
 
         # Apply parameter ranges
         for param, prange in self._parameter_ranges.items():
@@ -61,7 +65,7 @@ class TapReferenceCatalogue(HuntsmanBase):
                                    output_file=filename)
         return pd.read_csv(filename)
 
-    def create_refcat(self, ra_list, dec_list, filename=None):
+    def create_refcat(self, ra_list, dec_list, filename=None, **kwargs):
         """
         Create the master reference catalogue with no source duplications.
 
@@ -77,7 +81,7 @@ class TapReferenceCatalogue(HuntsmanBase):
         with NamedTemporaryFile(delete=True) as tempfile:
             for ra, dec in zip(ra_list, dec_list):
                 # Do the cone search and get result
-                df = self.cone_search(ra, dec, filename=tempfile.name)
+                df = self.cone_search(ra, dec, filename=tempfile.name, **kwargs)
                 # First iteration
                 if result is None:
                     result = df

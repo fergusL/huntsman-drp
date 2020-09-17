@@ -1,4 +1,5 @@
 """Code to interface with the Huntsman database."""
+from datetime import datetime, timedelta
 from urllib.parse import quote_plus
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
@@ -102,6 +103,26 @@ class DataTable(HuntsmanBase):
             entry (list of dict): The documents to insert.
         """
         self._table.insert_many(entries)
+
+    def query_latest(self, days=0, hours=0, seconds=0, column_name=None, **kwargs):
+        """
+        Convenience function to query the latest files in the db.
+
+        Args:
+            days (int): default 0.
+            hours (int): default 0.
+            seconds (int): default 0.
+            column_name (int, optional): If given, call `datatable.query_column` with
+                `column_name` as its first argument.
+            **kwargs: Passed to the query.
+        Returns:
+            list: Query result.
+        """
+        date_now = datetime.utcnow()
+        date_start = date_now - timedelta(days=days, hours=hours, seconds=seconds)
+        if column_name is not None:
+            return self.query_column(column_name, date_start=date_start, **kwargs)
+        return self.query(date_start=date_start, **kwargs)
 
 
 class RawDataTable(DataTable):

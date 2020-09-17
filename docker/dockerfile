@@ -23,7 +23,7 @@ RUN yum install -y wget vim && \
   echo "https://:@s3.lsst.codes" >> ~/.git-credentials && \
   # Install extra python stuff into LSST conda env
   . ${LSST_HOME}/loadLSST.bash && \
-  pip install ipython pymongo
+  pip install ipython pymongo astroquery
 
 WORKDIR ${LSST_HOME}
 ADD bash_config.sh .
