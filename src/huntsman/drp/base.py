@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import yaml
+from contextlib import suppress
 from collections import abc
 
 
@@ -21,6 +22,23 @@ def _update_config(d, u):
     return d
 
 
+def load_config(config_dir=None, ignore_local=False):
+    """
+
+    """
+    try:
+        dir = os.path.join(os.environ["HUNTSMAN_DRP"], "conf_files")
+    except KeyError:
+        raise KeyError("HUNTSMAN_DRP environment variable not set. Exiting.")
+    config = _load_yaml(os.path.join(dir, "config.yaml"))
+    # Update the config with local version
+    if not ignore_local:
+        with suppress(FileNotFoundError):
+            config_local = _load_yaml(os.path.join(dir, "config_local.yaml"))
+            config = _update_config(config, config_local)
+    return config
+
+
 class HuntsmanBase():
     """ Base class to setup config and logger."""
 
@@ -33,24 +51,8 @@ class HuntsmanBase():
 
         # Load the config
         if config is None:
-            config = self._load_config()
+            config = load_config()
         self.config = config
-
-    def _load_config(self, config_dir=None):
-        """Load the config file"""
-        try:
-            dir = os.path.join(os.environ["HUNTSMAN_DRP"], "conf_files")
-        except KeyError as err:
-            self.logger.error("HUNTSMAN_DRP environment variable not set. Exiting.")
-            raise err
-        config = _load_yaml(os.path.join(dir, "config.yaml"))
-        # Update the config with local version
-        try:
-            config_local = _load_yaml(os.path.join(dir, "config_local.yaml"))
-            config = _update_config(config, config_local)
-        except FileNotFoundError:
-            pass
-        return config
 
     def _get_logger(self):
         logger = logging.getLogger(__name__)

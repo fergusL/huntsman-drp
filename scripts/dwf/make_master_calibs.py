@@ -9,7 +9,7 @@ from huntsman.drp.butler import ButlerRepository
 def get_recent_calibs(interval_days, **kwargs):
     """Get the most recent calibration images."""
 
-    datatable = RawDataTable(0)
+    datatable = RawDataTable()
 
     # Get bias filenames
     filenames_bias = datatable.query_latest(days=interval_days, dataType="bias",
@@ -36,13 +36,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--interval', type=int, default=1, help='Time interval in days.')
+    parser.add_argument('--ccd', default=None, help='CCD number.')
     args = parser.parse_args()
     interval_days = args.interval  # Days
+    ccd = args.ccd
+    if ccd is not None:
+        ccd = int(ccd)
 
     rerun = "dwfrerun"
 
     # Get filenames
-    filenames = get_recent_calibs(interval_days, ccd=2)
+    filenames = get_recent_calibs(interval_days, ccd=ccd)
 
     # Make butler repository
     with ButlerRepository("/opt/lsst/software/stack/DATA") as butler_repo:
@@ -51,6 +55,6 @@ if __name__ == "__main__":
         butler_repo.ingest_raw_data(filenames, ignore_ingested=True)
 
         # Make master calibs
-        butler_repo.make_master_calibs(calib_date=current_date(), rerun=rerun, skip_bias=False)
-
+        butler_repo.make_master_calibs(calib_date=current_date(), rerun=rerun, skip_bias=False,
+                                       ccd=ccd)
     print("Finished.")

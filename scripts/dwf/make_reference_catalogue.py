@@ -1,3 +1,8 @@
+"""
+This code produces a reference catalogue centred on the two FRB fields, used
+for astrometric and photometric calibration. The catalogue is ingested into
+the default butler repository.
+"""
 from tempfile import NamedTemporaryFile
 
 from huntsman.drp.butler import ButlerRepository
@@ -8,7 +13,7 @@ if __name__ == "__main__":
 
     ra_list = [329.4195, 334.01979167]
     dec_list = [-80.358, -7.89822222]
-    radius_degrees = 2
+    radius_degrees = 1
 
     butler_repository = ButlerRepository("/opt/lsst/software/stack/DATA")
 

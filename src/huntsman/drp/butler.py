@@ -26,7 +26,7 @@ class ButlerRepository(HuntsmanBase):
     def __enter__(self):
         return self
 
-    def __exit__(self):
+    def __exit__(self, *args, **kwargs):
         pass
 
     @property

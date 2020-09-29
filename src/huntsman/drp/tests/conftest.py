@@ -4,9 +4,15 @@ import yaml
 import numpy as np
 from astropy.io import fits
 
+from huntsman.drp.base import load_config
 from huntsman.drp.fitsutil import FitsHeaderTranslator
 from huntsman.drp.datatable import RawDataTable
 from huntsman.drp.butler import TemporaryButlerRepository
+
+
+@pytest.fixture(scope="session")
+def config():
+    return load_config(ignore_local=True)
 
 
 def make_test_data(filename, taiObs, dataType, camera=1, filter="g2", shape=(30, 50), bias=32,
@@ -53,18 +59,23 @@ def test_data():
 
 
 @pytest.fixture(scope="session")
-def fits_header_translator():
-    return FitsHeaderTranslator()
+def fits_header_translator(config):
+    return FitsHeaderTranslator(config=config)
+
+
+@pytest.fixture(scope="function")
+def temp_butler_repo(config):
+    return TemporaryButlerRepository(config=config)
 
 
 @pytest.fixture(scope="session")
-def raw_data_table(tmp_path_factory, test_data, fits_header_translator):
+def raw_data_table(config, tmp_path_factory, test_data, fits_header_translator):
     """
     Create a temporary directory populated with fake FITS images, then parse the images into the
     raw data table.
     """
     raw_data = test_data["raw_data"]
-    raw_data_table = RawDataTable()
+    raw_data_table = RawDataTable(config=config)
     tempdir = tmp_path_factory.mktemp("testdata")
     for i, data_dict in enumerate(raw_data):
         filename = os.path.join(tempdir, f"testdata_{i}.fits")
@@ -78,8 +89,3 @@ def raw_data_table(tmp_path_factory, test_data, fits_header_translator):
     # Make sure table has the correct number of rows
     assert len(raw_data_table.query()) == len(raw_data)
     return raw_data_table
-
-
-@pytest.fixture(scope="function")
-def temp_butler_repo():
-    return TemporaryButlerRepository()

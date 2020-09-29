@@ -1,4 +1,4 @@
-"""Script to periodically query and process new data."""
+"""Script to periodically query and process new data. WIP not working yet!"""
 import time
 from queue import Queue
 from threading import Thread

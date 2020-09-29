@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime
 
-from huntsman.drp.dataquality import get_simple_image_data_stats
+from huntsman.drp.quality.dataquality import get_simple_image_data_stats
 from huntsman.drp.fitsutil import read_fits_header
 from huntsman.drp.utils import parse_date
 
