@@ -1,5 +1,6 @@
 ![Python Tests](https://github.com/AstroHuntsman/huntsman-drp/workflows/Python%20Tests/badge.svg?branch=develop)
 ![Docker CI](https://github.com/AstroHuntsman/huntsman-drp/workflows/Docker%20CI/badge.svg)
+![codecov](https://codecov.io/gh/AstroHuntsman/huntsman-drp/branch/develop/graph/badge.svg?token=YX14FHHXG5)
 
 # huntsman-drp
 The Huntsman data reduction pipeline (`huntsman-drp`) is responsible for creating calibrated science data from raw images taken by the Huntsman telephoto array. The pipeline uses the LSST code stack configured using the [AstroHuntsman/obs_huntsman](https://github.com/AstroHuntsman/obs_huntsman) package.
@@ -16,7 +17,7 @@ To run tests locally, ensure that the `HUNTSMAN_DRP` and `OBS_HUNTSMAN` environm
 cd $HUNTSMAN_DRP/docker/testing
 docker-compose up
 ```
-When the tests have finished, you might need to ``ctrl+c`` cancel the test script. 
+When the tests have finished, you might need to ``ctrl+c`` cancel the test script.
 
 When finished testing, be sure to type the following to shut down the docker containers:
 ```

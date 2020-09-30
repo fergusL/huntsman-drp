@@ -190,6 +190,7 @@ class TemporaryButlerRepository(ButlerRepository):
         self._tempdir = TemporaryDirectory()
         self.butler_directory = self._tempdir.name
         self._initialise()
+        return self
 
     def __exit__(self, *args, **kwargs):
         """Close temporary directory."""

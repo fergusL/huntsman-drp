@@ -7,7 +7,8 @@ from astropy.io import fits
 from huntsman.drp.base import load_config
 from huntsman.drp.fitsutil import FitsHeaderTranslator
 from huntsman.drp.datatable import RawDataTable
-from huntsman.drp.butler import TemporaryButlerRepository
+from huntsman.drp.refcat import TapReferenceCatalogue
+from huntsman.drp.butler import ButlerRepository, TemporaryButlerRepository
 
 
 @pytest.fixture(scope="session")
@@ -57,15 +58,38 @@ def test_data():
         data = yaml.safe_load(f)
     return data
 
+# ===========================================================================
+# Reference catalogue
 
 @pytest.fixture(scope="session")
-def fits_header_translator(config):
-    return FitsHeaderTranslator(config=config)
+def reference_catalogue(config):
+    return TapReferenceCatalogue(config=config)
 
+# ===========================================================================
+# Butler repositories
 
 @pytest.fixture(scope="function")
 def temp_butler_repo(config):
     return TemporaryButlerRepository(config=config)
+
+
+@pytest.fixture(scope="function")
+def fixed_butler_repo(config, tmp_path_factory):
+    dir = tmp_path_factory.mktemp("fixed_butler_repo")
+    return ButlerRepository(directory=str(dir), config=config)
+
+
+@pytest.fixture(scope="function")
+def butler_repos(fixed_butler_repo, temp_butler_repo):
+    return fixed_butler_repo, temp_butler_repo
+
+
+# ===========================================================================
+# Database
+
+@pytest.fixture(scope="session")
+def fits_header_translator(config):
+    return FitsHeaderTranslator(config=config)
 
 
 @pytest.fixture(scope="session")
