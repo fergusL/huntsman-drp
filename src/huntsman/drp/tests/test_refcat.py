@@ -33,7 +33,7 @@ def test_create_refcat(reference_catalogue, config, tolerance=0.2):
     # Ensure parameters are within ranges
     pranges = config["refcat"]["parameter_ranges"]
     for key in pranges:
-        assert key in df.columns # Make sure the key is present in df
+        assert key in df.columns  # Make sure the key is present in df
         with suppress(KeyError):
             assert (df[key].values >= pranges[key]["lower"]).all()
         with suppress(KeyError):

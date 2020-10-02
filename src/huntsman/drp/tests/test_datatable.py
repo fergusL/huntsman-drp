@@ -1,8 +1,9 @@
 import pytest
 import copy
+from datetime import timedelta
 
+from huntsman.drp.utils import current_date, parse_date
 from huntsman.drp.fitsutil import read_fits_header
-from huntsman.drp.utils import parse_date
 from huntsman.drp.datatable import RawDataTable
 
 from pymongo.errors import ServerSelectionTimeoutError
@@ -36,5 +37,18 @@ def test_datatable_query_by_date(raw_data_table, fits_header_translator):
             assert date < parse_date(date_end)
 
 
-def test_datatable_insert_many(raw_data_table, test_data):
-    raw_data_table.insert_many(test_data['raw_data'])
+def test_query_latest(raw_data_table, config, tol=1):
+    """Test query_latest finds the correct number of DB entries."""
+    date_start = config["testing"]["exposure_sequence"]["start_date"]
+    n_days = config["testing"]["exposure_sequence"]["n_days"]
+    date_start = parse_date(date_start)
+    date_now = current_date()
+    if date_now <= date_start + timedelta(days=n_days):
+        pytest.skip(f"Test does not work unless current date is later than all test exposures.")
+    timediff = date_now - date_start
+    # This should capture all the files
+    qresult = raw_data_table.query_latest(days=timediff.days + tol)
+    assert len(qresult) == len(raw_data_table.query())
+    # This should capture none of the files
+    qresult = raw_data_table.query_latest(days=0, hours=0, seconds=0)
+    assert len(qresult) == 0

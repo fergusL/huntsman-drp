@@ -29,14 +29,14 @@ camera_mappings:
   "1919420013090900": 8
   "2d194b0013090900": 9
   "2014420013090900": 10
-  "TESTCAM01": 11
-  "TESTCAM02": 12
-  "83F010774": 13
-  "83F011167": 14
-  "83F011791": 15
-  "83F010801": 16
-  "83F011758": 17
-  "83F011810": 18
+  "83F010774": 11
+  "83F011167": 12
+  "83F011791": 13
+  "83F010801": 14
+  "83F011758": 15
+  "83F011810": 16
+  "TESTCAM01": 17
+  "TESTCAM02": 18
 
 mongodb:
   hostname: "localhost"
@@ -57,3 +57,22 @@ refcat:
       lower: 0.9
     g_psf:
       upper: 19
+
+testing:
+  exposure_sequence:
+    start_date: "2020-02-04"
+    n_cameras: 2
+    n_days: 3   # Simulate this number of nights
+    n_flat: 2   # Per (filter, camera) pair
+    n_bias: 2   # Per (exposure time, camera) pair
+    n_science: 1  # Per (camera, field, filter) combination
+    exptime_flat: 30
+    exptime_science: 60
+    filters:
+      - "g_band"
+      - "r_band"
+    size_x: 100
+    size_y: 100
+    dtype: uint16
+    saturate: 4096  # ADU
+    bias: 32  # ADU

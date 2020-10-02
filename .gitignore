@@ -104,5 +104,8 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# Mac
+*.DS_Store
+
 # config
-conf_files/*_local*
+config/*_local*

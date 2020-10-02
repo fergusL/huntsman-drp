@@ -27,7 +27,7 @@ def load_config(config_dir=None, ignore_local=False):
 
     """
     try:
-        dir = os.path.join(os.environ["HUNTSMAN_DRP"], "conf_files")
+        dir = os.path.join(os.environ["HUNTSMAN_DRP"], "config")
     except KeyError:
         raise KeyError("HUNTSMAN_DRP environment variable not set. Exiting.")
     config = _load_yaml(os.path.join(dir, "config.yaml"))

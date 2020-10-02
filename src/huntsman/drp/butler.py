@@ -3,6 +3,7 @@ from contextlib import suppress
 from collections import defaultdict
 from tempfile import TemporaryDirectory
 
+import sqlite3
 import lsst.daf.persistence as dafPersist
 
 import huntsman.drp.lsst_tasks as lsst
@@ -162,9 +163,28 @@ class ButlerRepository(HuntsmanBase):
             lsst.assembleCoadd(filter_name, butler_directory=self.butler_directory,
                                calib_directory=self.calib_directory, rerun=f'{rerun}:coadd')
 
-    def get_calexp_metadata(self):
-        """Get calibrated science exposure (calexp) metadata"""
-        pass
+    def query_calib_metadata(self, table):
+        """
+        Query the ingested calibs. TODO: Replace with the "official" Butler version.
+
+        Args:
+            table (str): Table name. Can either be "flat" or "bias".
+        Returns:
+            list of dict: The query result in column: value.
+        """
+        # Access the sqlite DB
+        conn = sqlite3.connect(os.path.join(self.calib_directory, "calibRegistry.sqlite3"))
+        c = conn.cursor()
+        # Query the calibs
+        result = c.execute(f"SELECT * from {table}")
+        result_dict = []
+        for row in result:
+            d = {}
+            for idx, col in enumerate(c.description):
+                d[col[0]] = row[idx]
+            result_dict.append(d)
+        c.close()
+        return result_dict
 
     def _initialise(self):
         """Initialise a new butler repository."""
