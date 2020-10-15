@@ -6,3 +6,7 @@ eups declare huntsman_drp v1 -r "${LSST_HOME}/huntsman-drp"
 setup obs_huntsman v1
 setup huntsman_drp v1
 setup display_firefly
+
+alias python=python3
+# need this so panoptes-utils knows where to find solve-field executable
+export SOLVE_FIELD=$(which solve-field)
