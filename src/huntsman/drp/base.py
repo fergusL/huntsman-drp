@@ -26,15 +26,17 @@ def load_config(config_dir=None, ignore_local=False):
     """
 
     """
-    try:
-        dir = os.path.join(os.environ["HUNTSMAN_DRP"], "config")
-    except KeyError:
-        raise KeyError("HUNTSMAN_DRP environment variable not set. Exiting.")
-    config = _load_yaml(os.path.join(dir, "config.yaml"))
+    if config_dir is None:
+        try:
+            config_dir = os.path.join(os.environ["HUNTSMAN_DRP"], "config")
+        except KeyError:
+            raise KeyError("HUNTSMAN_DRP environment variable not set."
+                           " Unable to determine config directory.")
+    config = _load_yaml(os.path.join(config_dir, "config.yaml"))
     # Update the config with local version
     if not ignore_local:
         with suppress(FileNotFoundError):
-            config_local = _load_yaml(os.path.join(dir, "config_local.yaml"))
+            config_local = _load_yaml(os.path.join(config_dir, "config_local.yaml"))
             config = _update_config(config, config_local)
     return config
 
