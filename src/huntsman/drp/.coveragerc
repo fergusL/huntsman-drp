@@ -1,6 +1,7 @@
 [run]
 source = huntsman.drp
 omit = ./tests/*
+parallel = true
 
 [report]
 exclude_lines =

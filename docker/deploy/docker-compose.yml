@@ -6,7 +6,6 @@ services:
       driver: "none"
     build:
       context: "${HUNTSMAN_DRP}/docker"
-    user: root
     network_mode: "host"
     stdin_open: true
     tty: true

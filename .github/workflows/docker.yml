@@ -2,7 +2,9 @@ name: Docker CI
 on:
   push:
     branches:
-      - develop
+    - develop
+    paths:
+    - docker/Dockerfile
 jobs:
   build:
     runs-on: ubuntu-latest
