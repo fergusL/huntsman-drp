@@ -9,9 +9,9 @@ from huntsman.drp.datatable import RawDataTable
 from pymongo.errors import ServerSelectionTimeoutError
 
 
-def test_mongodb_wrong_host_name(raw_data_table):
+def test_mongodb_wrong_host_name(raw_data_table, config):
     """Test if an error is raised if the mongodb hostname is incorrect."""
-    modified_config = copy.copy(raw_data_table.config)
+    modified_config = copy.deepcopy(config)
     modified_config["mongodb"]["hostname"] = "nonExistantHostName"
     with pytest.raises(ServerSelectionTimeoutError):
         RawDataTable(config=modified_config)
@@ -66,14 +66,14 @@ def test_update_file_data(raw_data_table):
     assert old_value != new_value  # Let's be sure...
     # Update the key with the new value
     update_dict = {key: new_value}
-    raw_data_table.update_file_data(filename=filename, data=update_dict)
+    raw_data_table.update_file_data(filename=filename, data=update_dict, bypass_allow_edits=True)
     # Check the values match
     data_updated = raw_data_table.query()[0]
     assert data_updated["_id"] == data["_id"]
     assert data_updated[key] == new_value
     # Change back to original value
     update_dict = {key: old_value}
-    raw_data_table.update_file_data(filename=filename, data=update_dict)
+    raw_data_table.update_file_data(filename=filename, data=update_dict, bypass_allow_edits=True)
     data_updated = raw_data_table.query()[0]
     assert data_updated["_id"] == data["_id"]
     assert data_updated[key] == old_value
@@ -86,5 +86,14 @@ def test_update_file_data_bad_filename(raw_data_table):
     filename = "ThisIsNotAFilename"
     assert filename not in filenames
     update_dict = {"A Key": "A Value"}
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
+        raw_data_table.update_file_data(filename=filename, data=update_dict,
+                                        bypass_allow_edits=True)
+
+
+def test_update_no_permission(raw_data_table):
+    """ Make sure we can't edit things without permission. """
+    filename = ""
+    update_dict = {}
+    with pytest.raises(PermissionError):
         raw_data_table.update_file_data(filename=filename, data=update_dict)

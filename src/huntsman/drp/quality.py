@@ -1,12 +1,13 @@
 """
 Functions to calculate data quality metrics.
 """
+from astropy.io import fits
 from astropy import stats
 
 METRICS = "clipped_stats", "flipped_asymmetry"
 
 
-def get_metadata(data, config=None):
+def metadata_from_fits(filename, config=None):
     """
     Return a dictionary of simple image stats for the file.
     Args:
@@ -14,7 +15,8 @@ def get_metadata(data, config=None):
     Returns:
         dict: A dictionary of metadata key: value pairs.
     """
-    result = dict()
+    data = fits.getdata(filename)
+    result = dict(filename=filename)
     for metric_name in METRICS:
         result.update(globals()[metric_name](data, config=config))
     return result

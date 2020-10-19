@@ -42,6 +42,7 @@ mongodb:
   hostname: "localhost"
   port: 27017
   db_name: "huntsman"
+  date_key: "taiObs"
   tables:
     raw_data: "raw_data"
 
@@ -62,7 +63,7 @@ testing:
   exposure_sequence:
     start_date: "2020-02-04"
     n_cameras: 2
-    n_days: 3   # Simulate this number of nights
+    n_days: 2   # Simulate this number of nights
     n_flat: 2   # Per (filter, camera) pair
     n_bias: 2   # Per (exposure time, camera) pair
     n_science: 1  # Per (camera, field, filter) combination
@@ -76,3 +77,4 @@ testing:
     dtype: uint16
     saturate: 4096  # ADU
     bias: 32  # ADU
+    pixel_size: 1.2  # Arcseconds per pixel

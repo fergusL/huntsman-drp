@@ -2,6 +2,7 @@ import os
 import yaml
 import numpy as np
 from astropy.io import fits
+from astropy import units as u
 from datetime import timedelta
 
 from huntsman.drp.base import HuntsmanBase
@@ -22,7 +23,7 @@ def datetime_to_taiObs(date):
 
 
 def make_hdu(data, date, cam_name, exposure_time, field, image_type, ccd_temp=0, filter="Blank",
-             imageId="TestImageId", ra=10, dec=-20, airmass=1):
+             imageId="TestImageId", ra=10, dec=-20, airmass=1, pixel_size=1):
     """Make a HDU with a minimal header for DRP to function."""
     hdu = fits.PrimaryHDU(data)
     hdu.header['EXPTIME'] = exposure_time
@@ -36,6 +37,10 @@ def make_hdu(data, date, cam_name, exposure_time, field, image_type, ccd_temp=0,
     hdu.header["RA-MNT"] = ra
     hdu.header["DEC-MNT"] = dec
     hdu.header["AIRMASS"] = airmass
+    hdu.header["CD1_1"] = pixel_size.to_value(u.degree / u.pixel)
+    hdu.header["CD2_2"] = pixel_size.to_value(u.degree / u.pixel)
+    hdu.header["CD1_2"] = 0
+    hdu.header["CD2_1"] = 0
     return hdu
 
 
@@ -54,6 +59,7 @@ class FakeExposureSequence(HuntsmanBase):
         self.dtype = self.config["dtype"]
         self.saturate = self.config["saturate"]
         self.bias = self.config["bias"]
+        self.pixel_size = self.config["pixel_size"] * u.arcsecond / u.pixel
         self.header_dict = {}
 
     def generate_fake_data(self, directory):
@@ -118,7 +124,8 @@ class FakeExposureSequence(HuntsmanBase):
         assert (data > 0).all()
         # Create the header object
         hdu = make_hdu(data=data, date=date, cam_name=cam_name, exposure_time=exposure_time,
-                       field=field, filter=filter, image_type="Light Frame")
+                       field=field, filter=filter, image_type="Light Frame",
+                       pixel_size=self.pixel_size)
         return hdu
 
     def _make_dark_frame(self, date, cam_name, exposure_time, field="Dark Field"):
@@ -130,7 +137,7 @@ class FakeExposureSequence(HuntsmanBase):
         assert (data > 0).all()
         # Create the header object
         hdu = make_hdu(data=data, date=date, cam_name=cam_name, exposure_time=exposure_time,
-                       field=field, image_type="Dark Frame")
+                       field=field, image_type="Dark Frame", pixel_size=self.pixel_size)
         return hdu
 
     def _get_filename(self, directory):
