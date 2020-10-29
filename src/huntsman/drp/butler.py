@@ -8,7 +8,7 @@ import lsst.daf.persistence as dafPersist
 
 import huntsman.drp.lsst_tasks as lsst
 from huntsman.drp.base import HuntsmanBase
-from huntsman.drp.utils import date_to_ymd
+from huntsman.drp.utils.date import date_to_ymd
 
 
 class ButlerRepository(HuntsmanBase):

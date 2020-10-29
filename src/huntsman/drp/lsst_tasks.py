@@ -6,7 +6,7 @@ from lsst.utils import getPackageDir
 
 from lsst.meas.algorithms import IngestIndexedReferenceTask
 # from lsst.pipe.drivers.constructCalibs import BiasTask, FlatTask
-from huntsman.drp.utils import date_to_ymd
+from huntsman.drp.utils.date import date_to_ymd
 
 
 def ingest_raw_data(filename_list, butler_directory, mode="link", ignore_ingested=False):

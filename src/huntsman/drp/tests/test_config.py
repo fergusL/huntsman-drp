@@ -2,7 +2,7 @@ import os
 import yaml
 import pytest
 
-from huntsman.drp.base import load_config
+from huntsman.drp.core import get_config
 
 
 @pytest.fixture(scope="module")
@@ -26,9 +26,9 @@ def config_dir(config_dict, config_dict_local, tmpdir_factory):
     return dir
 
 
-def test_load_config(config_dict, config_dir):
+def test_get_config(config_dict, config_dir):
     """Test we can load the config file."""
-    config = load_config(config_dir=config_dir, ignore_local=True)
+    config = get_config(config_dir=config_dir, ignore_local=True)
     assert len(config) == len(config_dict)
     for key, value in config_dict.items():
         assert config[key] == value
@@ -36,7 +36,7 @@ def test_load_config(config_dict, config_dir):
 
 def test_load_local_config(config_dict, config_dict_local, config_dir):
     """Test we can load the config file and the local config file."""
-    config = load_config(config_dir=config_dir, ignore_local=False)
+    config = get_config(config_dir=config_dir, ignore_local=False)
     for key, value in config_dict_local.items():
         assert config[key] == value
     for key, value in config_dict.items():

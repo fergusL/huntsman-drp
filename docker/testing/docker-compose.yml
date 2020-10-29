@@ -22,4 +22,4 @@ services:
     environment:
       - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
       - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
-    command: /opt/lsst/software/stack/huntsman-drp/scripts/testing/run_local_tests.sh
+    command: /opt/lsst/software/stack/huntsman-drp/scripts/testing/run_docker_tests.sh

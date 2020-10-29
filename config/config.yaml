@@ -78,3 +78,14 @@ testing:
     saturate: 4096  # ADU
     bias: 32  # ADU
     pixel_size: 1.2  # Arcseconds per pixel
+
+screening:
+  flat:
+    table: huntsman.drp.datatable.RawQualityTable
+    key: filename
+  bias:
+    table: huntsman.drp.datatable.RawQualityTable
+    key: filename
+  science:
+    table: huntsman.drp.datatable.RawQualityTable
+    key: filename

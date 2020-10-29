@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime
 
 from huntsman.drp.fitsutil import read_fits_header
-from huntsman.drp import utils
+from huntsman.drp.utils.date import current_date, parse_date, current_date_ymd
 
 
 def test_read_fits_header_bad_extension():
@@ -13,9 +13,9 @@ def test_read_fits_header_bad_extension():
 
 
 def test_parse_date_datetime():
-    utils.parse_date(datetime.today())
+    parse_date(datetime.today())
 
 
 def test_date_to_ymd():
-    date = utils.current_date()
-    assert utils.current_date_ymd() == date.strftime('%Y-%m-%d')
+    date = current_date()
+    assert current_date_ymd() == date.strftime('%Y-%m-%d')

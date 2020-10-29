@@ -2,7 +2,7 @@ import pytest
 import copy
 from datetime import timedelta
 
-from huntsman.drp.utils import current_date, parse_date
+from huntsman.drp.utils.date import current_date, parse_date
 from huntsman.drp.fitsutil import read_fits_header
 from huntsman.drp.datatable import RawDataTable
 
@@ -56,7 +56,7 @@ def test_query_latest(raw_data_table, config, tol=1):
 
 def test_update_file_data(raw_data_table):
     """Test that we can update a document specified by a filename."""
-    data = raw_data_table.query()[0]
+    data = raw_data_table.query().iloc[0]
     # Get a filename to use as an identifier
     filename = data["filename"]
     # Get a key to update
@@ -68,13 +68,13 @@ def test_update_file_data(raw_data_table):
     update_dict = {key: new_value}
     raw_data_table.update_file_data(filename=filename, data=update_dict, bypass_allow_edits=True)
     # Check the values match
-    data_updated = raw_data_table.query()[0]
+    data_updated = raw_data_table.query().iloc[0]
     assert data_updated["_id"] == data["_id"]
     assert data_updated[key] == new_value
     # Change back to original value
     update_dict = {key: old_value}
     raw_data_table.update_file_data(filename=filename, data=update_dict, bypass_allow_edits=True)
-    data_updated = raw_data_table.query()[0]
+    data_updated = raw_data_table.query().iloc[0]
     assert data_updated["_id"] == data["_id"]
     assert data_updated[key] == old_value
 
@@ -97,3 +97,46 @@ def test_update_no_permission(raw_data_table):
     update_dict = {}
     with pytest.raises(PermissionError):
         raw_data_table.update_file_data(filename=filename, data=update_dict)
+
+
+def test_screening(raw_data_table, raw_quality_table, config):
+    """ Test data screening functionality """
+    # Get some files
+    query_dict = {"dataType": "science"}
+    df = raw_data_table.query(query_dict=query_dict)[:3]
+    assert df.shape[0] == 3
+
+    # Make up some metadata
+    raw_quality_table.insert_one(metadata={"test_metric": 0, "filename": df.iloc[0]["filename"]})
+    raw_quality_table.insert_one(metadata={"test_metric": 1, "filename": df.iloc[1]["filename"]})
+    raw_quality_table.insert_one(metadata={"test_metric": 2, "filename": df.iloc[2]["filename"]})
+
+    # This should be specified in the config, but best to be sure.
+    if "metrics" not in raw_data_table.config["screening"]["science"].keys():
+        raw_data_table.config["screening"]["science"]["metrics"] = {}
+
+    # Test screening
+    screen_dict = {"test_metric": {"minimum": -1, "maximum": 3}}
+    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
+    df_screened = raw_data_table.screen_query_result(df)
+    assert df_screened.shape[0] == 3
+
+    screen_dict = {"test_metric": {"minimum": 1, "maximum": 3}}
+    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
+    df_screened = raw_data_table.screen_query_result(df)
+    assert df_screened.shape[0] == 2
+
+    screen_dict = {"test_metric": {"minimum": 1, "maximum": 2}}
+    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
+    df_screened = raw_data_table.screen_query_result(df)
+    assert df_screened.shape[0] == 1
+
+    screen_dict = {"test_metric": {"equals": 1}}
+    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
+    df_screened = raw_data_table.screen_query_result(df)
+    assert df_screened.shape[0] == 1
+
+    screen_dict = {"test_metric": {"not_equals": 1}}
+    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
+    df_screened = raw_data_table.screen_query_result(df)
+    assert df_screened.shape[0] == 2

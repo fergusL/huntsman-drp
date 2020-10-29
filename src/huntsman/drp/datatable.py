@@ -3,8 +3,13 @@ from datetime import datetime, timedelta
 from urllib.parse import quote_plus
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
+import numpy as np
+import pandas as pd
 
-from huntsman.drp.utils import parse_date
+from huntsman.drp.utils.date import parse_date
+from huntsman.drp.utils.mongo import encode_metadata
+from huntsman.drp.utils.screening import satisfies_criteria
+from huntsman.drp.utils.library import load_module
 from huntsman.drp.base import HuntsmanBase
 
 
@@ -58,7 +63,6 @@ class DataTable(HuntsmanBase):
         except ServerSelectionTimeoutError as err:
             self.logger.error(f"Unable to connect to mongodb at {hostname}:{port}.")
             raise err
-
         self._db = self._client[db_name]
         self._table = self._db[table_name]
 
@@ -73,32 +77,47 @@ class DataTable(HuntsmanBase):
             list of dict: The find result.
         """
         cursor = self._table.find(data_id)
+        df = pd.DataFrame(list(cursor))
         if expected_count is not None:
-            count = cursor.count()
-            if count != expected_count:
-                raise RuntimeError(f"Expected {expected_count} matches but found {count}.")
-        return list(cursor)
+            if df.shape[0] != expected_count:
+                raise RuntimeError(f"Expected {expected_count} matches but found {df.shape[0]}.")
+        return df
 
-    def query(self, date_start=None, date_end=None, query_dict=None):
+    def query(self, date=None, date_start=None, date_end=None, query_dict=None,
+              screen_quality=False):
         """
         Query the table, optionally with a date range.
         Args:
+            date (date, optional): The specific date to query on.
             date_start (date, optional): The earliest date of returned rows.
             date_end (date, optional): The latest date of returned rows.
             query_dict (dict, optional): Parsed to the query.
+            screen_quality (bool, optional): If True, remove query results that do not meet
+                data quality requirements.
         Returns:
             list of dict: Dictionary of query results.
         """
         if query_dict is not None:
             query_dict = {key: value for key, value in query_dict.items() if value is not None}
-        result = self.find(query_dict)
+        df = self.find(query_dict)
+
+        # Apply date selection using parse_date
         # TODO remove this in favour of pymongo date handling
-        if date_start is not None:
-            result = [r for r in result if parse_date(r[self._date_key]) >= parse_date(date_start)]
-        if date_end is not None:
-            result = [r for r in result if parse_date(r[self._date_key]) < parse_date(date_end)]
-        self.logger.debug(f"Query returned {len(result)} results.")
-        return result
+        if self._date_key in df.columns:
+            parsed_dates = [parse_date(d) for d in df[self._date_key].values]
+            criteria = {}
+            if date is not None:
+                criteria["equals"] = parse_date(date)
+            if date_start is not None:
+                criteria["minimum"] = parse_date(date_start)
+            if date_end is not None:
+                criteria["maximum"] = parse_date(date_end)
+            keep = satisfies_criteria(parsed_dates, criteria, logger=self.logger,
+                                      metric_name=self._date_key)
+            df = df[keep].reset_index(drop=True)
+
+        self.logger.debug(f"Query returned {df.shape[0]} results.")
+        return df
 
     def query_column(self, column_name, date_start=None, date_end=None, query_dict=None):
         """
@@ -111,8 +130,8 @@ class DataTable(HuntsmanBase):
         Returns:
             List: List of column values matching the query.
         """
-        query_results = self.query(query_dict=query_dict, date_start=date_start, date_end=date_end)
-        return [q[column_name] for q in query_results]
+        df = self.query(query_dict=query_dict, date_start=date_start, date_end=date_end)
+        return df[column_name].values
 
     def query_latest(self, days=0, hours=0, seconds=0, column_name=None, query_dict=None):
         """
@@ -132,6 +151,27 @@ class DataTable(HuntsmanBase):
         if column_name is not None:
             return self.query_column(column_name, date_start=date_start, query_dict=query_dict)
         return self.query(date_start=date_start, query_dict=query_dict)
+
+    def query_matches(self, values, match_key, one_to_one=True, **kwargs):
+        """ Get matches with
+        Args:
+            table (huntsman.drp.datatable.DataTable): The data table to match with.
+            match_key (str): The key to match on.
+            one_to_one (bool): If True (default), require one-to-one matching.
+            **kwargs: Parsed to table.query
+        Returns:
+            pd.DataFrame: The matched query result.
+        """
+        df_query = self.query(**kwargs)
+        # Use the matching key as the DataFrame index
+        df_query.set_index(match_key, inplace=True)
+        # Return the matched DataFrame.
+        df_matched = pd.DataFrame([df_query.loc[v] for v in values])
+        df_matched[match_key] = values
+        if one_to_one:
+            if df_matched.shape[0] != len(values):
+                raise RuntimeError("One-to-one criteria not satisfied for matching query.")
+        return df_matched
 
     @edit_permission_validation
     @new_document_validation
@@ -168,11 +208,11 @@ class DataTable(HuntsmanBase):
             `pymongo.results.UpdateResult`: The result of the update operation.
         """
         self.find(data_id, expected_count=1)  # Make sure there is only one match
+        # Since we are using pymongo we will have to do some parsing
+        metadata = encode_metadata(metadata)
         result = self._table.update_one(data_id, {'$set': metadata}, upsert=False)
-        if result.matched_count == 0:
-            raise ValueError("No matches in database for update.")
-        if result.matched_count > 1:
-            raise ValueError("Multiple matches in database for update.")
+        if result.matched_count != 1:
+            raise RuntimeError(f"Unexpected number of documents updated: {result.deleted_count}.")
         return result
 
     @edit_permission_validation
@@ -186,10 +226,8 @@ class DataTable(HuntsmanBase):
         """
         self.find(data_id, expected_count=1)  # Make sure there is only one match
         result = self._table.delete_one(data_id)
-        if result.matched_count == 0:
-            raise ValueError("No matches in database for update.")
-        if result.matched_count > 1:
-            raise ValueError("Multiple matches in database for update.")
+        if result.deleted_count != 1:
+            raise RuntimeError(f"Unexpected number of documents deleted: {result.deleted_count}.")
         return result
 
     def update_file_data(self, filename, data, **kwargs):
@@ -217,6 +255,9 @@ class DataTable(HuntsmanBase):
         """
         data_id = {'filename': filename}
         return self.delete_document(data_id, **kwargs)
+
+    def screen_query_result(self, query_result):  # This should be implemented in the subclasses
+        raise NotImplementedError
 
     def _validate_edit_permission(self, bypass_allow_edits=False, **kwargs):
         """Raise a PermissionError if not `bypass_allow_edits` or `self._allow_edits`."""
@@ -248,10 +289,60 @@ class RawDataTable(DataTable):
         table_name = self.config["mongodb"]["tables"][self._table_key]
         self._initialise(db_name, table_name)
 
+    def screen_query_result(self, query_result, screen_config=None):
+        """
+        Apply data quality screening to the query result, returning only the results that match
+        the selecton criteria given in the config.
+        Args:
+            query_result (pd.DataFrame): The query result to screen.
+            screen_config (dict, optional): The config dict for the screening. If none, will get
+                from config file.
+        Returns:
+            pd.DataFrame: The screened query result.
+        """
+        screen_config = self.config["screening"] if screen_config is None else screen_config
+        to_keep = np.ones(query_result.shape[0], dtype="bool")  # True if we will keep the row
 
-class DataQualityTable(DataTable):
-    """Table to store data quality metadata."""
-    _table_name = "data_quality"
+        # Apply quality criteria specific to data types
+        data_types = query_result["dataType"].values
+        for data_type in set(data_types):
+
+            # Skip if unknown data type
+            if data_type not in screen_config.keys():
+                self.logger.warn(f"Data type {data_type} not in quality screening config and will"
+                                 " be retained in query result.")
+                continue
+            # Skip if no metrics
+            if screen_config[data_type].get("metrics", None) is None:
+                self.logger.warn(f"No screening metrics found for dataType={data_type}.")
+                continue
+
+            # Select row subset that have the correct dataType
+            query_of_type = data_types == data_type
+
+            # Retrieve quality metrics from appropriate table
+            match_key = screen_config[data_type]["key"]
+            match_table = screen_config[data_type]["table"]
+            dqtable = load_module(match_table)(logger=self.logger, config=self.config)
+            df_match = dqtable.query_matches(values=query_result[match_key].values[query_of_type],
+                                             match_key=match_key)
+
+            for metric_name, criteria in screen_config[data_type]["metrics"].items():
+                # Extract metric data for row subset
+                metric_data = df_match[metric_name].values
+                # Check if rows satisfy criteria
+                meets_criteria = satisfies_criteria(metric_data, criteria, logger=self.logger,
+                                                    metric_name=metric_name)
+                # Update array of which rows to keep
+                to_keep[query_of_type] = np.logical_and(to_keep[query_of_type], meets_criteria)
+
+        # Return an updated dataframe with only the selected rows
+        return query_result[to_keep].reset_index(drop=True)
+
+
+class RawQualityTable(DataTable):
+    """Table to store data quality metadata for raw data."""
+    _table_name = "raw_quality"
     _required_columns = ("filename",)
     _allow_edits = True
 

@@ -1,6 +1,6 @@
 import os
 
-from huntsman.drp.utils import current_date
+from huntsman.drp.utils.date import current_date
 
 
 def test_initialise(butler_repos):

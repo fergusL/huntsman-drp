@@ -1,4 +1,4 @@
-"""Generic functions for huntsman-drp."""
+"""Functionality to assist handling of dates within huntsman-drp."""
 from contextlib import suppress
 from datetime import datetime
 from dateutil.parser import parse as parse_date_dateutil

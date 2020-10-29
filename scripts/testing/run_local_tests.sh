@@ -1,15 +1,20 @@
 #!/bin/bash
-source ~/.bashrc
+# This script is run from outside of the docker environment and is useful for running
+# local tests.
 set -eu
 
-# Put coverage files somewhere we have permissions to write them. ${LSST_HOME} by default.
-COVERAGE_ROOT=${HUNTSMAN_COVERAGE:-${LSST_HOME}}
-cd ${COVERAGE_ROOT}
+HUNTSMAN_DRP_COVDIR=${HUNTSMAN_DRP_COVDIR:-${HUNTSMAN_DRP}/coverage}
+COMPOSE_FILE=${HUNTSMAN_DRP}/docker/testing/docker-compose.yml
 
-pytest ${HUNTSMAN_DRP} -x \
-  --cov=huntsman.drp \
-  --cov-config=${HUNTSMAN_DRP}/src/huntsman/drp/.coveragerc \
-  --cov-report xml:${COVERAGE_ROOT}/coverage.xml \
-  --session2file=${COVERAGE_ROOT}/pytest_session.txt
+function cleanup {
+  echo "Stopping docker testing services."
+  docker-compose -f ${COMPOSE_FILE} down
+}
 
-exit 0
+mkdir -p ${HUNTSMAN_DRP_COVDIR} && chmod -R 777 ${HUNTSMAN_DRP_COVDIR}
+
+trap cleanup EXIT
+docker-compose -f ${COMPOSE_FILE} run --rm \
+  -e "HUNTSMAN_COVERAGE=/opt/lsst/software/stack/coverage" \
+  -v "${HUNTSMAN_DRP_COVDIR}:/opt/lsst/software/stack/coverage" \
+  python_tests

@@ -1,7 +1,7 @@
 """Code to make a master calibs from most recent files for each camera."""
 import argparse
 
-from huntsman.drp.utils import current_date
+from huntsman.drp.utils.date import current_date
 from huntsman.drp.datatable import RawDataTable
 from huntsman.drp.butler import ButlerRepository
 

@@ -6,7 +6,7 @@ from astropy import units as u
 from datetime import timedelta
 
 from huntsman.drp.base import HuntsmanBase
-from huntsman.drp.utils import parse_date
+from huntsman.drp.utils.date import parse_date
 
 
 def load_test_config():
