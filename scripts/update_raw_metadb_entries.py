@@ -29,7 +29,8 @@ def extract_metadata_from_header(fname):
             header = read_fits_header(fname)
             # if any warnings were raised, record in the log
             if len(w) > 0:
-                logger.warning(f"Warnings raised in accessing header of {fname}, warning(s): {w}")
+                wmsgs = [warn.message for warn in w]
+                logger.warning(f"Warnings raised in accessing header of {fname}, warning(s): {wmsgs}")
     except Exception as e:
         logger.warning(f"Failed to read fits header of {fname}, error: {e!r}")
         return
