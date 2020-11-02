@@ -9,7 +9,6 @@ fits_header:
     expId: "IMAGEID"
     taiObs: "DATE-OBS"
     field: "FIELD"
-    filter: "FILTER"
   required_columns:
     - "expTime"
     - "taiObs"
