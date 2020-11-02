@@ -4,7 +4,7 @@ fits_header:
     ccdTemp: "CCD-TEMP"
     expId: "IMAGEID"
     taiObs: "DATE-OBS"
-    field: "FIELD"
+    filter: "FILTER"
   required_columns:
     - "expTime"
     - "taiObs"
