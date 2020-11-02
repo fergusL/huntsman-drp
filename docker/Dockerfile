@@ -30,7 +30,7 @@ RUN yum install -y wget vim sudo && \
   echo "https://:@s3.lsst.codes" >> ~/.git-credentials && \
   # Install extra python stuff into LSST conda env
   source ${LSST_HOME}/loadLSST.bash && \
-  pip install ipython pymongo astroquery panoptes-utils && \
+  pip install ipython pymongo astroquery panoptes-utils tqdm && \
   # Downgrade coverage version to avoid pytest issues
   pip uninstall -y coverage && \
   pip install coverage==4.5.4 && \
