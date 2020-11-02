@@ -83,6 +83,19 @@ class FitsHeaderTranslatorBase(HuntsmanBase):
         ccd_name = md["INSTRUME"]
         return int(self.huntsman_config["camera_mappings"][ccd_name])
 
+    def translate_field(self, md):
+        if md['IMAGETYP'] == 'Light Frame':
+            try:
+                field = md['FIELD']
+            except KeyError as ke:
+                field = 'unknown'
+            return
+        elif md['IMAGETYP'] == 'Dark Frame':
+            field = 'dark'
+        else:
+            field = md['FIELD']
+        return field
+
     def _map_header_key(self, md, header_key):
         """Generic function to translate header_key to variable."""
         return md[header_key]
