@@ -89,7 +89,6 @@ class FitsHeaderTranslatorBase(HuntsmanBase):
                 field = md['FIELD']
             except KeyError as ke:
                 field = 'unknown'
-            return
         elif md['IMAGETYP'] == 'Dark Frame':
             field = 'dark'
         else:
