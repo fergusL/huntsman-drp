@@ -90,9 +90,9 @@ class FitsHeaderTranslatorBase(HuntsmanBase):
             except KeyError as ke:
                 field = 'unknown'
         elif md['IMAGETYP'] == 'Dark Frame':
-            field = 'dark'
-        else:
             field = md['FIELD']
+        else:
+            field = 'Dark-Field'
         return field
 
     def _map_header_key(self, md, header_key):
