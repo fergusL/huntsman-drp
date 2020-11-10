@@ -20,13 +20,13 @@ def test_mongodb_wrong_host_name(raw_data_table, config):
 def test_datatable_query_by_date(raw_data_table, fits_header_translator):
     """ """
     # Get list of all dates in the database
-    dates = sorted(raw_data_table.query_column("dateObs"))
+    dates = sorted(raw_data_table.query()["dateObs"].values)
     date_end = dates[-1]
     n_files = len(dates)
     for date_start in dates[:-1]:
         # Get filenames between dates
-        filenames = raw_data_table.query_column("filename", date_start=date_start,
-                                                date_end=date_end)
+        filenames = raw_data_table.query(date_start=date_start,
+                                         date_end=date_end)["filename"].values
         assert len(filenames) <= n_files  # This holds because we sorted the dates
         n_files = len(filenames)
         for filename in filenames:
@@ -82,7 +82,7 @@ def test_update_file_data(raw_data_table):
 def test_update_file_data_bad_filename(raw_data_table):
     """Test that we can update a document specified by a filename."""
     # Specify the bad filename
-    filenames = raw_data_table.query_column("filename")
+    filenames = raw_data_table.query()["filename"].values
     filename = "ThisIsNotAFilename"
     assert filename not in filenames
     update_dict = {"A Key": "A Value"}

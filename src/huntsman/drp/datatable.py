@@ -1,4 +1,5 @@
 """Code to interface with the Huntsman database."""
+from contextlib import suppress
 from datetime import datetime, timedelta
 from urllib.parse import quote_plus
 from pymongo import MongoClient
@@ -40,6 +41,11 @@ class DataTable(HuntsmanBase):
         HuntsmanBase.__init__(self, **kwargs)
         self._date_key = self.config["mongodb"]["date_key"]
 
+        # Initialise the DB
+        self._table_name = self.config["mongodb"]["tables"][self._table_key]
+        db_name = self.config["mongodb"]["db_name"]
+        self._initialise(db_name, self._table_name)
+
     def _initialise(self, db_name, table_name):
         """
         Initialise the datebase.
@@ -76,6 +82,8 @@ class DataTable(HuntsmanBase):
         Returns:
             list of dict: The find result.
         """
+        if data_id is not None:
+            data_id = encode_metadata(data_id)
         cursor = self._table.find(data_id)
         df = pd.DataFrame(list(cursor))
         if expected_count is not None:
@@ -119,37 +127,19 @@ class DataTable(HuntsmanBase):
         self.logger.debug(f"Query returned {df.shape[0]} results.")
         return df
 
-    def query_column(self, column_name, date_start=None, date_end=None, query_dict=None):
-        """
-        Convenience function to query database and return entries for a specific column.
-        Args:
-            column_name (str): The column name.
-            date_start (date, optional): The earliest date of returned rows.
-            date_end (date, optional): The latest date of returned rows.
-            query_dict (dict, optional): Parsed to the query.
-        Returns:
-            List: List of column values matching the query.
-        """
-        df = self.query(query_dict=query_dict, date_start=date_start, date_end=date_end)
-        return df[column_name].values
-
-    def query_latest(self, days=0, hours=0, seconds=0, column_name=None, query_dict=None):
+    def query_latest(self, days=0, hours=0, seconds=0, query_dict=None):
         """
         Convenience function to query the latest files in the db.
         Args:
             days (int): default 0.
             hours (int): default 0.
             seconds (int): default 0.
-            column_name (int, optional): If given, call `datatable.query_column` with
-                `column_name` as its first argument.
             query_dict (dict, optional): Parsed to the query.
         Returns:
             list: Query result.
         """
         date_now = datetime.utcnow()
         date_start = date_now - timedelta(days=days, hours=hours, seconds=seconds)
-        if column_name is not None:
-            return self.query_column(column_name, date_start=date_start, query_dict=query_dict)
         return self.query(date_start=date_start, query_dict=query_dict)
 
     def query_matches(self, values, match_key, one_to_one=True, **kwargs):
@@ -224,6 +214,10 @@ class DataTable(HuntsmanBase):
         Returns:
             `pymongo.results.UpdateResult`: The result of the delete operation.
         """
+        with suppress(AttributeError):
+            data_id = data_id.to_dict()
+        if data_id is not None:
+            data_id = encode_metadata(data_id)
         self.find(data_id, expected_count=1)  # Make sure there is only one match
         result = self._table.delete_one(data_id)
         if result.deleted_count != 1:
@@ -284,10 +278,6 @@ class RawDataTable(DataTable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._required_columns = self.config["fits_header"]["required_columns"]
-        # Initialise the DB
-        db_name = self.config["mongodb"]["db_name"]
-        table_name = self.config["mongodb"]["tables"][self._table_key]
-        self._initialise(db_name, table_name)
 
     def screen_query_result(self, query_result, screen_config=None):
         """
@@ -341,13 +331,20 @@ class RawDataTable(DataTable):
 
 
 class RawQualityTable(DataTable):
-    """Table to store data quality metadata for raw data."""
-    _table_name = "raw_quality"
+    """ Table to store data quality metadata for raw data. """
+    _table_key = "raw_quality"
     _required_columns = ("filename",)
     _allow_edits = True
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Initialise the DB
-        db_name = self.config["mongodb"]["db_name"]
-        self._initialise(db_name, self._table_name)
+
+
+class MasterCalibTable(DataTable):
+    """ Table to store metadata for master calibs. """
+    _table_key = "master_calib"
+    _required_columns = ("filename", "calibDate")
+    _allow_edits = True
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)

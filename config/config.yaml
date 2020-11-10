@@ -1,3 +1,7 @@
+directories:
+  archive:
+    master_calibs: ${HUNTSMAN_MOUNT}/archive/calibs
+
 fits_header:
   mappings:
     expTime: "EXPTIME"
@@ -45,6 +49,15 @@ mongodb:
   date_key: "taiObs"
   tables:
     raw_data: "raw_data"
+    master_calib: "master_calib"
+    raw_quality: "raw_quality"
+
+calibs:
+  types:
+    - flat
+    - bias
+  validity: 1000
+
 
 refcat:
   tap_url: http://api.skymapper.nci.org.au/aus/tap/

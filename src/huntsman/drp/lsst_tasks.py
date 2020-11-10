@@ -1,4 +1,5 @@
 import os
+import copy
 import subprocess
 
 from lsst.pipe.tasks.ingest import IngestTask
@@ -6,7 +7,17 @@ from lsst.utils import getPackageDir
 
 from lsst.meas.algorithms import IngestIndexedReferenceTask
 # from lsst.pipe.drivers.constructCalibs import BiasTask, FlatTask
+
 from huntsman.drp.utils.date import date_to_ymd
+from huntsman.drp.utils.butler import get_unique_calib_ids, fill_calib_keys
+from huntsman.drp.core import get_logger
+
+
+def run_command(cmd, logger=None):
+    if logger is None:
+        logger = get_logger()
+    logger.debug(f"Running LSST command in subprocess: {cmd}")
+    return subprocess.check_output(cmd, shell=True)
 
 
 def ingest_raw_data(filename_list, butler_directory, mode="link", ignore_ingested=False):
@@ -43,76 +54,82 @@ def ingest_reference_catalogue(butler_directory, filenames, output_directory=Non
     IngestIndexedReferenceTask.parseAndRun(args=args)
 
 
-def ingest_master_biases(calib_date, butler_directory, calib_directory, rerun, validity=1000):
+def ingest_master_calibs(datasetType, filenames, butler_directory, calib_directory, validity):
     """
     Ingest the master bias of a given date.
     """
-    calib_date = date_to_ymd(calib_date)
     cmd = f"ingestCalibs.py {butler_directory}"
-    # TODO - Remove hard-coded directory structure
-    cmd += f" {butler_directory}/rerun/{rerun}/calib/bias/{calib_date}/*/*.fits"
+    cmd += " " + " ".join(filenames)
     cmd += f" --validity {validity}"
     cmd += f" --calib {calib_directory} --mode=link"
 
     # For some reason we have to provide the config explicitly
-    config_file = os.path.join(getPackageDir("obs_huntsman"), "config", "ingestBiases.py")
+    if datasetType == "bias":
+        config_file = "ingestBiases.py"
+    elif datasetType == "flat":
+        config_file = "ingestFlats.py"
+    else:
+        raise ValueError(f"Unrecognised calib datasetType: {datasetType}.")
+    config_file = os.path.join(getPackageDir("obs_huntsman"), "config", config_file)
     cmd += " --config clobber=True"
     cmd += f" --configfile {config_file}"
 
-    subprocess.check_output(cmd, shell=True)
+    # Run the LSST command
+    run_command(cmd)
 
 
-def ingest_master_flats(calib_date, butler_directory, calib_directory, rerun, validity=1000):
+def make_master_calibs(datasetType, data_ids, calib_date, butler_repository, rerun, nodes=1,
+                       procs=1):
     """
-    Ingest the master flat of a given date.
-    """
-    calib_date = date_to_ymd(calib_date)
-    cmd = f"ingestCalibs.py {butler_directory}"
-    # TODO - Remove hard-coded directory structure
-    cmd += f" {butler_directory}/rerun/{rerun}/calib/flat/{calib_date}/*/*.fits"
-    cmd += f" --validity {validity}"
-    cmd += f" --calib {calib_directory} --mode=link"
+    Use constructBias.py to construct master bias frames for the data_ids. The master calibs are
+    produced for each unique calibId obtainable from the list of dataIds.
 
-    # For some reason we have to provide the config explicitly
-    config_file = os.path.join(getPackageDir("obs_huntsman"), "config", "ingestFlats.py")
-    cmd += " --config clobber=True"
-    cmd += f" --configfile {config_file}"
-
-    subprocess.check_output(cmd, shell=True)
-
-
-def constructBias(calib_date, exptime, ccd, butler_directory, calib_directory, rerun, data_ids,
-                  nodes=1, procs=1):
-    """
-
+    Args:
+        datasetType (str): The calib datasetType (e.g. bias, flat).
+        data_ids (list of dict): The list of dataIds used to produce the master calibs.
+        calib_date (date): The date to associate with the master calibs.
+        butler_repository (huntsman.drp.butler.ButlerRepository): The butler repository object.
+        rerun (str): The rerun name.
+        nodes (int): The number of nodes to run on.
+        procs (int): The number of processes to use per node.
     """
     calib_date = date_to_ymd(calib_date)
-    cmd = f"constructBias.py {butler_directory} --rerun {rerun}"
-    cmd += f" --calib {calib_directory}"
-    cmd += f" --id visit={'^'.join([f'{id}' for id in data_ids])}"
-    cmd += " dataType='bias'"
-    cmd += f" expTime={exptime}"
-    cmd += f" ccd={ccd}"
-    cmd += f" --nodes {nodes} --procs {procs}"
-    cmd += f" --calibId expTime={exptime} calibDate={calib_date}"
-    subprocess.check_output(cmd, shell=True)
 
+    if datasetType == "bias":
+        script_name = "constructBias.py"
+    elif datasetType == "flat":
+        script_name = "constructFlat.py"
+    else:
+        raise ValueError(f"Unrecognised calib datasetType: {datasetType}.")
 
-def constructFlat(calib_date, filter_name, ccd, butler_directory, calib_directory, rerun, data_ids,
-                  nodes=1, procs=1):
-    """
+    # Prepare the dataIds
+    data_ids = copy.deepcopy(data_ids)
+    for data_id in data_ids:
+        # Fill required missing keys
+        data_id.update(fill_calib_keys(data_id, datasetType, butler=butler_repository.butler,
+                                       keys_ignore=["calibDate"]))
+        # Add the calib date to the dataId
+        data_id["calibDate"] = calib_date
 
-    """
-    calib_date = date_to_ymd(calib_date)
-    cmd = f"constructFlat.py {butler_directory} --rerun {rerun}"
-    cmd += f" --calib {calib_directory}"
-    cmd += f" --id visit={'^'.join([f'{id}' for id in data_ids])}"
-    cmd += " dataType='flat'"
-    cmd += f" filter={filter_name}"
-    cmd += f" ccd={ccd}"
-    cmd += f" --nodes {nodes} --procs {procs}"
-    cmd += f" --calibId filter={filter_name} calibDate={calib_date}"
-    subprocess.check_output(cmd, shell=True)
+    # For some reason we have to run each calibId separately
+    unique_calib_ids = get_unique_calib_ids(datasetType, data_ids, butler=butler_repository.butler)
+    for calib_id in unique_calib_ids:
+
+        # Get data_ids corresponding to this calib_id
+        data_id_subset = [d for d in data_ids if calib_id.items() <= d.items()]
+
+        # Construct the command
+        cmd = f"{script_name} {butler_repository.butler_directory} --rerun {rerun}"
+        cmd += f" --calib {butler_repository.calib_directory}"
+        for data_id in data_id_subset:
+            cmd += " --id"
+            for k, v in data_id.items():
+                cmd += f" {k}={v}"
+        cmd += f" --nodes {nodes} --procs {procs}"
+        cmd += f" --calibId " + " ".join([f"{k}={v}" for k, v in calib_id.items()])
+
+        # Run the LSST command
+        run_command(cmd)
 
 
 def processCcd(butler_directory, calib_directory, rerun, filter_name, dataType='science'):

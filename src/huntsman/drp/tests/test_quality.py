@@ -9,7 +9,7 @@ def filename_list(raw_data_table):
     Load a small amount of data to run the tests on.
     """
     query_dict = dict(dataType="science")
-    return raw_data_table.query_column("filename", query_dict=query_dict)[:2]
+    return raw_data_table.query(query_dict=query_dict)["filename"].values[:2]
 
 
 def test_metadata_from_fits(filename_list, config):

@@ -7,7 +7,7 @@ from huntsman.drp.core import get_config
 
 @pytest.fixture(scope="module")
 def config_dict():
-    return {"a": 1, "b": 2, "c": 3}
+    return {"a": 1, "b": 2, "c": 3, "directories": {"home": "${HOME}"}}
 
 
 @pytest.fixture(scope="module")
@@ -31,14 +31,19 @@ def test_get_config(config_dict, config_dir):
     config = get_config(config_dir=config_dir, ignore_local=True)
     assert len(config) == len(config_dict)
     for key, value in config_dict.items():
-        assert config[key] == value
+        if key != "directories":
+            assert config[key] == value
+    assert config["directories"]["home"] == os.environ["HOME"]
 
 
 def test_load_local_config(config_dict, config_dict_local, config_dir):
     """Test we can load the config file and the local config file."""
     config = get_config(config_dir=config_dir, ignore_local=False)
     for key, value in config_dict_local.items():
-        assert config[key] == value
+        if key != "directories":
+            assert config[key] == value
     for key, value in config_dict.items():
         if key not in config_dict_local.keys():
-            assert config[key] == value
+            if key != "directories":
+                assert config[key] == value
+    assert config["directories"]["home"] == os.environ["HOME"]
