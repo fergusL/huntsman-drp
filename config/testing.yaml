@@ -1,0 +1,18 @@
+exposure_sequence:
+  start_date: "2020-02-04"
+  n_cameras: 2
+  n_days: 2   # Simulate this number of nights
+  n_flat: 2   # Per (filter, camera) pair
+  n_bias: 2   # Per (exposure time, camera) pair
+  n_science: 1  # Per (camera, field, filter) combination
+  exptime_flat: 30
+  exptime_science: 60
+  filters:
+    - "g_band"
+    - "r_band"
+  size_x: 100
+  size_y: 100
+  dtype: uint16
+  saturate: 4096  # ADU
+  bias: 32  # ADU
+  pixel_size: 1.2  # Arcseconds per pixel

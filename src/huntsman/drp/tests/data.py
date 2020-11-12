@@ -53,7 +53,7 @@ class FakeExposureSequence(HuntsmanBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.config = self.config["testing"]["exposure_sequence"]
+        self.config = self.config["exposure_sequence"]
         self.file_count = 0
         self.shape = self.config["size_y"], self.config["size_x"]
         self.dtype = self.config["dtype"]

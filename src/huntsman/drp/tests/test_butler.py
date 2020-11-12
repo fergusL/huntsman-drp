@@ -29,7 +29,7 @@ def test_temp_repo(temp_butler_repo):
 
 def test_ingest(raw_data_table, butler_repos, config):
     """Test ingest for each Butler repository."""
-    config = config["testing"]["exposure_sequence"]
+    config = config["exposure_sequence"]
     n_filters = len(config["filters"])
 
     filenames = raw_data_table.query()["filename"].values
@@ -60,7 +60,7 @@ def test_ingest(raw_data_table, butler_repos, config):
 
 def test_make_master_calibs(raw_data_table, temp_butler_repo, config):
     """ Make sure the correct number of master bias frames are produced."""
-    test_config = config["testing"]["exposure_sequence"]
+    test_config = config["exposure_sequence"]
     n_filters = len(test_config["filters"])
     n_bias = test_config["n_cameras"] * 2  # 2 exp times
     n_flat = test_config["n_cameras"] * n_filters

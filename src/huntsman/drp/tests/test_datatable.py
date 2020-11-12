@@ -39,8 +39,8 @@ def test_datatable_query_by_date(raw_data_table, fits_header_translator):
 
 def test_query_latest(raw_data_table, config, tol=1):
     """Test query_latest finds the correct number of DB entries."""
-    date_start = config["testing"]["exposure_sequence"]["start_date"]
-    n_days = config["testing"]["exposure_sequence"]["n_days"]
+    date_start = config["exposure_sequence"]["start_date"]
+    n_days = config["exposure_sequence"]["n_days"]
     date_start = parse_date(date_start)
     date_now = current_date()
     if date_now <= date_start + timedelta(days=n_days):
@@ -97,46 +97,3 @@ def test_update_no_permission(raw_data_table):
     update_dict = {}
     with pytest.raises(PermissionError):
         raw_data_table.update_file_data(filename=filename, data=update_dict)
-
-
-def test_screening(raw_data_table, raw_quality_table, config):
-    """ Test data screening functionality """
-    # Get some files
-    query_dict = {"dataType": "science"}
-    df = raw_data_table.query(query_dict=query_dict)[:3]
-    assert df.shape[0] == 3
-
-    # Make up some metadata
-    raw_quality_table.insert_one(metadata={"test_metric": 0, "filename": df.iloc[0]["filename"]})
-    raw_quality_table.insert_one(metadata={"test_metric": 1, "filename": df.iloc[1]["filename"]})
-    raw_quality_table.insert_one(metadata={"test_metric": 2, "filename": df.iloc[2]["filename"]})
-
-    # This should be specified in the config, but best to be sure.
-    if "metrics" not in raw_data_table.config["screening"]["science"].keys():
-        raw_data_table.config["screening"]["science"]["metrics"] = {}
-
-    # Test screening
-    screen_dict = {"test_metric": {"minimum": -1, "maximum": 3}}
-    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
-    df_screened = raw_data_table.screen_query_result(df)
-    assert df_screened.shape[0] == 3
-
-    screen_dict = {"test_metric": {"minimum": 1, "maximum": 3}}
-    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
-    df_screened = raw_data_table.screen_query_result(df)
-    assert df_screened.shape[0] == 2
-
-    screen_dict = {"test_metric": {"minimum": 1, "maximum": 2}}
-    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
-    df_screened = raw_data_table.screen_query_result(df)
-    assert df_screened.shape[0] == 1
-
-    screen_dict = {"test_metric": {"equals": 1}}
-    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
-    df_screened = raw_data_table.screen_query_result(df)
-    assert df_screened.shape[0] == 1
-
-    screen_dict = {"test_metric": {"not_equals": 1}}
-    raw_data_table.config["screening"]["science"]["metrics"].update(screen_dict)
-    df_screened = raw_data_table.screen_query_result(df)
-    assert df_screened.shape[0] == 2

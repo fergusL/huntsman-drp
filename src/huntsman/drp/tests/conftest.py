@@ -13,7 +13,7 @@ from huntsman.drp.butler import ButlerRepository, TemporaryButlerRepository
 
 @pytest.fixture(scope="session")
 def config():
-    return get_config(ignore_local=True)
+    return get_config(ignore_local=True, testing=True)
 
 # ===========================================================================
 # Reference catalogue

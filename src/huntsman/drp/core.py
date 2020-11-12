@@ -35,7 +35,7 @@ def _parse_directories(d):
     return d
 
 
-def get_config(config_dir=None, ignore_local=False, parse=True):
+def get_config(config_dir=None, ignore_local=False, parse=True, testing=False):
     """
 
     """
@@ -46,6 +46,11 @@ def get_config(config_dir=None, ignore_local=False, parse=True):
             raise KeyError("HUNTSMAN_DRP environment variable not set."
                            " Unable to determine config directory.")
     config = _load_yaml(os.path.join(config_dir, "config.yaml"))
+
+    # Update the config with testing version
+    if testing:
+        config_test = _load_yaml(os.path.join(config_dir, "testing.yaml"))
+        config = _update_config(config, config_test)
 
     # Update the config with local version
     if not ignore_local:
