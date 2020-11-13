@@ -4,10 +4,12 @@ Functions to calculate data quality metrics.
 from astropy.io import fits
 from astropy import stats
 
+from huntsman.drp.core import get_logger
+
 METRICS = "clipped_stats", "flipped_asymmetry"
 
 
-def metadata_from_fits(filename, config=None):
+def metadata_from_fits(filename, config=None, logger=None):
     """
     Return a dictionary of simple image stats for the file.
     Args:
@@ -15,10 +17,22 @@ def metadata_from_fits(filename, config=None):
     Returns:
         dict: A dictionary of metadata key: value pairs.
     """
+    if logger is None:
+        logger = get_logger()
+    logger.debug(f"Calculating metadata for {filename}.")
+
+    # Load the data from file
     data = fits.getdata(filename)
+
+    # Calculate metrics
     result = dict(filename=filename)
     for metric_name in METRICS:
-        result.update(globals()[metric_name](data, config=config))
+        logger.debug(f"Calcualating metric for {filename}: {metric_name}.")
+        try:
+            result.update(globals()[metric_name](data, config=config))
+        except Exception as err:
+            logger.error(f"Problem getting '{metric_name}' metric for {filename}: {err}")
+
     return result
 
 
