@@ -15,17 +15,21 @@ def metadata_from_fits(filename, config=None, logger=None):
     Args:
         filename (str): Filename of FITS image.
     Returns:
-        dict: A dictionary of metadata key: value pairs.
+        dict: A dictionary of metadata key: value pairs, including the filename.
     """
     if logger is None:
         logger = get_logger()
     logger.debug(f"Calculating metadata for {filename}.")
+    result = dict(filename=filename)
 
     # Load the data from file
-    data = fits.getdata(filename)
+    try:
+        data = fits.getdata(filename)
+    except FileNotFoundError:
+        logger.error(f"File not found: {filename}.")
+        return result
 
     # Calculate metrics
-    result = dict(filename=filename)
     for metric_name in METRICS:
         logger.debug(f"Calcualating metric for {filename}: {metric_name}.")
         try:
