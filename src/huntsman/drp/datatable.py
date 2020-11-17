@@ -10,17 +10,9 @@ from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 
 from huntsman.drp.utils.date import parse_date, current_date
-from huntsman.drp.utils.query import Criteria, QueryCriteria, encode_mongo_value
+from huntsman.drp.utils.query import Criteria, QueryCriteria
+from huntsman.drp.utils.mongo import encode_mongo_data
 from huntsman.drp.base import HuntsmanBase
-
-
-def new_document_validation(func):
-    """Wrapper to validate a new document."""
-
-    def wrapper(self, metadata, *args, **kwargs):
-        self._validate_new_document(metadata)
-        return func(self, metadata, *args, **kwargs)
-    return wrapper
 
 
 def edit_permission_validation(func):
@@ -167,18 +159,15 @@ class DataTable(HuntsmanBase):
 
         return df_matched
 
-    @edit_permission_validation
-    @new_document_validation
     def insert_one(self, metadata, **kwargs):
         """
         Insert a single entry into the table.
         Args:
             metadata (dict): The document to insert.
         """
-        del_id_key = "_id" not in metadata.keys()  # pymongo adds _id to metadata automatically
-        self._table.insert_one(metadata)
-        if del_id_key:
-            del metadata["_id"]
+        metadata = encode_mongo_data(metadata)
+        self._validate_new_document(metadata)
+        self._table.insert_one(metadata.copy())  # Copy because mongo modifies
 
     def insert_many(self, metadata_list, **kwargs):
         """
@@ -191,25 +180,27 @@ class DataTable(HuntsmanBase):
             self.insert_one(metadata, **kwargs)
 
     @edit_permission_validation
-    def update_document(self, data_id, metadata, **kwargs):
+    def update_document(self, data_id, metadata, upsert=False, **kwargs):
         """
-        Update the document associated with the data_id.
+        Update a single document associated with the data_id.
         Args:
             data_id (dict): Dictionary of key: value pairs identifying the document.
             data (dict): Dictionary of key: value pairs to update in the database. The field will
                 be created if it does not already exist.
+            upsert (bool): If True, insert a new document if a matching document does not exist.
         Returns:
             `pymongo.results.UpdateResult`: The result of the update operation.
         """
-        self.find(data_id, expected_count=1)  # Make sure there is only one match
-
-        # Since we are using pymongo we will have to do some parsing
-        metadata = encode_mongo_value(metadata)
-
-        result = self._table.update_one(data_id, {'$set': metadata}, upsert=False)
-        if result.matched_count != 1:
-            raise RuntimeError(f"Unexpected number of documents updated: {result.deleted_count}.")
-
+        # Check the dataID doesn't match with multiple documents
+        allowed_counts = [1]
+        if upsert:
+            allowed_counts.append(0)
+        n_matches = self.query(criteria=data_id).shape[0]
+        if n_matches not in allowed_counts:
+            raise RuntimeError(f"Data ID {data_id} matches with {n_matches} documents.")
+        # Update the document
+        metadata = encode_mongo_data(metadata)
+        result = self._table.update_one(data_id, {'$set': metadata}, upsert=upsert)
         return result
 
     @edit_permission_validation
@@ -224,7 +215,7 @@ class DataTable(HuntsmanBase):
         with suppress(AttributeError):
             data_id = data_id.to_dict()
         if data_id is not None:
-            data_id = encode_mongo_value(data_id)
+            data_id = encode_mongo_data(data_id)
 
         self.find(data_id, expected_count=1)  # Make sure there is only one match
         result = self._table.delete_one(data_id)

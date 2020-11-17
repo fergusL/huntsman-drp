@@ -133,17 +133,17 @@ class ButlerRepository(HuntsmanBase):
         """ Copy the master calibs from this Butler repository into the calib archive directory
         and insert the metadata into the master calib metadatabase.
         """
-        calib_archive_dir = self.config["directories"]["archive"]["master_calibs"]
+        archive_dir = self.config["directories"]["archive"]
         calib_datatable = MasterCalibTable(config=self.config, logger=self.logger)
 
-        for calib_type in ("flat", "bias"):
+        for calib_type in self.config["calibs"]["types"]:
             # Retrieve filenames and dataIds for all files of this type
             data_ids, filenames = get_files_of_type(f"calibrations.{calib_type}",
                                                     directory=self.calib_directory,
                                                     policy=self._policy)
             for metadata, filename in zip(data_ids, filenames):
                 # Create the filename for the archived copy
-                archived_filename = os.path.join(calib_archive_dir,
+                archived_filename = os.path.join(archive_dir,
                                                  os.path.relpath(filename, self.calib_directory))
                 # Copy the file into the calib archive
                 self.logger.debug(f"Copying {filename} to {archived_filename}.")

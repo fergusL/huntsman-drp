@@ -6,6 +6,7 @@ ARG user=lsst
 
 # Environment variables
 ENV LSST_HOME /opt/lsst/software/stack
+ENV USER ${user}
 
 USER root
 RUN yum install -y wget vim sudo && \
@@ -67,6 +68,6 @@ RUN yum install -y wget vim sudo && \
 USER ${user}
 WORKDIR ${LSST_HOME}
 ENV PATH="/usr/local/astrometry/bin:${PATH}"
-ADD bash_config.sh .
-RUN cat bash_config.sh >> ~/.bashrc
+ADD bash-config.sh .
+RUN cat bash-config.sh >> ~/.bashrc
 CMD ["/bin/bash"]
