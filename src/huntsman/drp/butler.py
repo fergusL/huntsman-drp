@@ -153,7 +153,7 @@ class ButlerRepository(HuntsmanBase):
                 # Insert the metadata into the calib database
                 metadata["filename"] = archived_filename
                 metadata["datasetType"] = calib_type
-                calib_datatable.insert_one(metadata)
+                calib_datatable.insert(metadata, overwrite=True)
 
     def query_calib_metadata(self, table):
         """

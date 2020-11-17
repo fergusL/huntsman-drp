@@ -3,12 +3,14 @@
 import json
 import glob
 import argparse
+from bson import json_util
+
 from huntsman.drp.fitsutil import read_fits_header, FitsHeaderTranslator
 
 
 def main(filename, print_stdout=True):
-    """Print to stdout FitsHeaderTranslator-parsed fits header for use in nifi data archive system.
-
+    """ Print to stdout FitsHeaderTranslator-parsed fits header for use in nifi data archive
+    system.
     Args:
         filename (str): Filename of fits file. Can be compressed.
         print_stdout (bool, optional): Print to stdout or not.
@@ -22,8 +24,8 @@ def main(filename, print_stdout=True):
     # Add the filename to the metadata
     meta["filename"] = filename
 
-    # Print as json
-    meta_json = json.dumps(meta)
+    # Print as json, encoding dates properly
+    meta_json = json.dumps(meta, default=json_util.default)
     if print_stdout:
         print(meta_json)
 
@@ -31,7 +33,6 @@ def main(filename, print_stdout=True):
 def test_main(glob_strings_list):
     """Will run the FitsHeaderTranslator on fits files, catching and printing
     any keyword errors. Can be used to isolate old or faulty fits files.
-
     Args:
         glob_strings_list (list): List of strings for glob'ing fits files.
     """

@@ -1,6 +1,7 @@
 import pytest
 import copy
 from datetime import timedelta
+import numpy as np
 
 from huntsman.drp.utils.date import current_date, parse_date
 from huntsman.drp.fitsutil import read_fits_header
@@ -20,10 +21,12 @@ def test_mongodb_wrong_host_name(raw_data_table, config):
 def test_datatable_query_by_date(raw_data_table, fits_header_translator):
     """ """
     # Get list of all dates in the database
-    dates = sorted(raw_data_table.query()["dateObs"].values)
+    dates = raw_data_table.query()["dateObs"].values
+    n_files = dates.size
+
+    dates_unique = np.unique(dates)  # Sorted array of unique dates
     date_end = dates[-1]
-    n_files = len(dates)
-    for date_start in dates[:-1]:
+    for date_start in dates_unique[:-1]:
         # Get filenames between dates
         filenames = raw_data_table.query(date_start=date_start,
                                          date_end=date_end)["filename"].values
@@ -54,7 +57,7 @@ def test_query_latest(raw_data_table, config, tol=1):
     assert len(qresult) == 0
 
 
-def test_update_file_data(raw_data_table):
+def test_update(raw_data_table):
     """Test that we can update a document specified by a filename."""
     data = raw_data_table.query().iloc[0]
     # Get a filename to use as an identifier
@@ -65,35 +68,28 @@ def test_update_file_data(raw_data_table):
     new_value = "ThisIsAnewValue"
     assert old_value != new_value  # Let's be sure...
     # Update the key with the new value
-    update_dict = {key: new_value}
-    raw_data_table.update_file_data(filename=filename, data=update_dict, bypass_allow_edits=True)
+    update_dict = {key: new_value, "filename": filename}
+    raw_data_table.update(update_dict)
     # Check the values match
     data_updated = raw_data_table.query().iloc[0]
     assert data_updated["_id"] == data["_id"]
     assert data_updated[key] == new_value
-    # Change back to original value
-    update_dict = {key: old_value}
-    raw_data_table.update_file_data(filename=filename, data=update_dict, bypass_allow_edits=True)
-    data_updated = raw_data_table.query().iloc[0]
-    assert data_updated["_id"] == data["_id"]
-    assert data_updated[key] == old_value
 
 
 def test_update_file_data_bad_filename(raw_data_table):
     """Test that we can update a document specified by a filename."""
     # Specify the bad filename
     filenames = raw_data_table.query()["filename"].values
-    filename = "ThisIsNotAFilename"
+    filename = "ThisFileDoesNotExist"
     assert filename not in filenames
-    update_dict = {"A Key": "A Value"}
+    update_dict = {"A Key": "A Value", "filename": filename}
     with pytest.raises(RuntimeError):
-        raw_data_table.update_file_data(filename=filename, data=update_dict,
-                                        bypass_allow_edits=True)
+        raw_data_table.update(update_dict, upsert=False)
 
 
 def test_update_no_permission(raw_data_table):
     """ Make sure we can't edit things without permission. """
-    filename = ""
-    update_dict = {}
+    raw_data_table.lock()
     with pytest.raises(PermissionError):
-        raw_data_table.update_file_data(filename=filename, data=update_dict)
+        raw_data_table.update({"filename": "notafile"}, {})
+    raw_data_table.unlock()

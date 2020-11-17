@@ -2,8 +2,10 @@ import os
 import json
 import subprocess
 
+from huntsman.drp.utils.date import parse_date
 
-def test_parse_script(raw_data_table):
+
+def test_parse_script(raw_data_table, config):
     """Call the script on a file and assert the printed metadata is correct."""
     # Get a raw data entry
     raw_data = raw_data_table.query().iloc[0]
@@ -17,4 +19,8 @@ def test_parse_script(raw_data_table):
     # Make sure we have consistent values
     assert len(metadata) == len(raw_data) - 1   # No _id column
     for key, value in metadata.items():
-        assert raw_data[key] == value
+        if key == config["mongodb"]["date_key"]:
+            date_key = config["fits_header"]["date_key"]
+            assert parse_date(value["$date"]) == parse_date(raw_data[date_key])
+        else:
+            assert raw_data[key] == value

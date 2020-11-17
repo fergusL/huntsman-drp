@@ -54,5 +54,4 @@ if __name__ == "__main__":
     # Update metadata in table
     logger.info(f"Adding quality metadata to database.")
     dqtable = RawQualityTable()
-    for filename, metadata in zip(filenames, metadata_list):
-        dqtable.update_file_data(filename, data=metadata, upsert=True)
+    dqtable.update(metadata_list, upsert=True)

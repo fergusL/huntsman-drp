@@ -18,6 +18,35 @@ OPERATORS = {"equals": lambda x, y: x == y,
              "not_in": lambda x, y: np.isin(x, y, invert=True)}
 
 
+def encode_mongo_value(value):
+    """ Encode object for a pymongodb query.
+    Args:
+        value (object): The value to encode.
+    Returns:
+        object: The encoded value.
+    """
+    with suppress(AttributeError):
+        value = value.to_dict()
+    if isinstance(value, abc.Mapping):
+        for k, v in value.items():
+            value[k] = encode_mongo_value(v)
+    elif isinstance(value, str):
+        pass
+    elif isinstance(value, abc.Iterable):
+        value = [encode_mongo_value(v) for v in value]
+    elif isinstance(value, np.bool_):
+        value = bool(value)
+    elif isinstance(value, np.int32):
+        value = int(value)
+    elif isinstance(value, np.float32):
+        value = float(value)
+    elif isinstance(value, np.int64):
+        value = int(value)
+    elif isinstance(value, np.float64):
+        value = float(value)
+    return value
+
+
 class Criteria(HuntsmanBase):
     """ Criteria objects generally correspond to single metadata columns."""
 
@@ -48,8 +77,12 @@ class Criteria(HuntsmanBase):
         """
         new = {}
         for k, v in self.criteria.items():
-            with suppress(KeyError):
+            try:
                 k = self._mongo_operators[k]
+            except KeyError:
+                if k not in self._mongo_operators.values():
+                    raise KeyError(f"Unrecognised criteria operator: {k}. Should be one of: "
+                                   f" {list(self._mongo_operators.keys())}")
             if v is not None:
                 new[k] = encode_mongo_data(v)
         return new

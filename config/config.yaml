@@ -2,6 +2,7 @@ directories:
   archive: ${HUNTSMAN_MOUNT}/archive
 
 fits_header:
+  date_key: "DATE-OBS"
   mappings:
     expTime: "EXPTIME"
     ccdTemp: "CCD-TEMP"
@@ -45,7 +46,7 @@ mongodb:
   hostname: "localhost"
   port: 27017
   db_name: "huntsman"
-  date_key: "taiObs"
+  date_key: "date"
   tables:
     raw_data: "raw_data"
     master_calib: "master_calib"

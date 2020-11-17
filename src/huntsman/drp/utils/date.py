@@ -3,27 +3,29 @@ from contextlib import suppress
 from datetime import datetime
 from dateutil.parser import parse as parse_date_dateutil
 
+import pandas as pd
 
-def parse_date(object):
-    """
-    Parse a date as a `datetime.datetime`.
 
+def parse_date(date):
+    """ Parse a date as a `datetime.datetime`.
     Args:
-        object (Object): The object to parse.
-
+        date (Object): The object to parse.
     Returns:
         A `datetime.datetime` object.
     """
+    if isinstance(date, int):
+        return datetime.fromtimestamp(date / 1e3)
+    if isinstance(date, pd.Timestamp):
+        return datetime.fromtimestamp(date)
     with suppress(AttributeError):
-        object = object.strip("(UTC)")
-    if type(object) is datetime:
-        return object
-    return parse_date_dateutil(object)
+        date = date.strip("(UTC)")
+    if type(date) is datetime:
+        return date
+    return parse_date_dateutil(date)
 
 
 def date_to_ymd(object):
-    """
-    Convert a date to YYYY:MM:DD format.
+    """ Convert a date to YYYY:MM:DD format.
     Args:
         object (Object): An object that can be parsed using `parse_date`.
     Returns:
@@ -39,8 +41,7 @@ def current_date():
 
 
 def current_date_ymd():
-    """
-    Get the UTC date now in YYYY-MM-DD format.
+    """ Get the UTC date now in YYYY-MM-DD format.
     Returns:
         str: The date.
     """

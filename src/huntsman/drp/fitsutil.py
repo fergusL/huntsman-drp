@@ -1,7 +1,12 @@
 from copy import copy
 from functools import partial
 from astropy.io import fits
+
+import json
+from bson.json_util import loads
+
 from huntsman.drp.base import HuntsmanBase
+from huntsman.drp.utils.date import parse_date
 
 
 def read_fits_header(filename):
@@ -96,9 +101,7 @@ class FitsHeaderTranslator(FitsHeaderTranslatorBase):
         self.config = self.huntsman_config
 
     def parse_header(self, header):
-        """
-        Parse header key/values into standardised python variables.
-
+        """ Parse header key/values into standardised python objects.
         Args:
             header (dict): Raw FITS header.
         """
@@ -106,7 +109,19 @@ class FitsHeaderTranslator(FitsHeaderTranslatorBase):
         result = dict()
         for key, value in header.items():
             result[key] = value
+
         # Also store mappings, overwriting if necessary
         for column in self.config["fits_header"]["required_columns"]:
             result[column] = getattr(self, f"translate_{column}")(header)
+
+        # Explicitly parse the date in specialised format with different key
+        date_key = self.config["mongodb"]["date_key"]
+        result[date_key] = self._translate_date(header)
+
         return result
+
+    def _translate_date(self, header):
+        """ Translate the date from the FITS header to a format recognised by pymongo. """
+        date_key = self.config["fits_header"]["date_key"]
+        date_str = parse_date(header[date_key])
+        return date_str
