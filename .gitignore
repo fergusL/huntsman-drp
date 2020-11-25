@@ -113,4 +113,8 @@ conf_files/*_local*
 config/*_local*
 
 .vscode/
+
+# huntsman-drp specific
+nifi/src
+
 =======
