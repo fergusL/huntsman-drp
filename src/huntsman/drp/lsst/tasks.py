@@ -5,19 +5,22 @@ import subprocess
 from lsst.pipe.tasks.ingest import IngestTask
 from lsst.utils import getPackageDir
 
-from lsst.meas.algorithms import IngestIndexedReferenceTask
+# from lsst.meas.algorithms import IngestIndexedReferenceTask
 # from lsst.pipe.drivers.constructCalibs import BiasTask, FlatTask
 
+from huntsman.drp.core import get_logger
 from huntsman.drp.utils.date import date_to_ymd
 from huntsman.drp.utils.butler import get_unique_calib_ids, fill_calib_keys
-from huntsman.drp.core import get_logger
+from huntsman.drp.lsst.ingest_refcat_task import HuntsmanIngestIndexedReferenceTask
 
 
 def run_command(cmd, logger=None):
+    """
+    """
     if logger is None:
         logger = get_logger()
     logger.debug(f"Running LSST command in subprocess: {cmd}")
-    return subprocess.check_output(cmd, shell=True)
+    return subprocess.run(cmd, shell=True, check=True)
 
 
 def ingest_raw_data(filename_list, butler_directory, mode="link", ignore_ingested=False):
@@ -42,7 +45,7 @@ def ingest_reference_catalogue(butler_directory, filenames, output_directory=Non
     # Load the config file
     pkgdir = getPackageDir("obs_huntsman")
     config_file = os.path.join(pkgdir, "config", "ingestSkyMapperReference.py")
-    config = IngestIndexedReferenceTask.ConfigClass()
+    config = HuntsmanIngestIndexedReferenceTask.ConfigClass()
     config.load(config_file)
 
     # Convert the files into the correct format and place them into the repository
@@ -51,7 +54,7 @@ def ingest_reference_catalogue(butler_directory, filenames, output_directory=Non
             "--output", output_directory,
             "--clobber-config",
             *filenames]
-    IngestIndexedReferenceTask.parseAndRun(args=args)
+    HuntsmanIngestIndexedReferenceTask.parseAndRun(args=args)
 
 
 def ingest_master_calibs(datasetType, filenames, butler_directory, calib_directory, validity):
@@ -132,12 +135,31 @@ def make_master_calibs(datasetType, data_ids, calib_date, butler_repository, rer
         run_command(cmd)
 
 
-def processCcd(butler_directory, calib_directory, rerun, filter_name, dataType='science'):
-    """Process ingested exposures."""
-    cmd = f"processCcd.py {butler_directory} --rerun {rerun}"
-    cmd += f" --id dataType={dataType} filter={filter_name}"
+def make_calexps(data_ids, rerun, butler_directory, calib_directory, no_exit=True, procs=1):
+    """ Make calibrated exposures (calexps) using the LSST stack. These are astrometrically
+    and photometrically calibrated as well as background subtracted. There are several byproducts
+    of making calexps including sky background maps and preliminary source catalogues and metadata,
+    inclding photometric zeropoints.
+    Args:
+        data_ids (list of abc.Mapping): The data IDs of the science frames to process.
+        rerun (str): The name of the rerun.
+        butler_directory (str): The butler repository directory name.
+        calib_directory (str): The calib directory used by the butler repository.
+        no_exit (bool, optional): If True (default), the program will not exit if an error is
+            raised by the stack.
+        procs (int, optional): The number of processes to use per node.  Default 1.
+    """
+    cmd = f"processCcd.py {butler_directory}"
+    if no_exit:
+        cmd += " --noExit"
+    cmd += f" --rerun {rerun}"
     cmd += f" --calib {calib_directory}"
-    subprocess.check_output(cmd, shell=True)
+    cmd += f" -j {procs}"
+    for data_id in data_ids:
+        cmd += " --id"
+        for k, v in data_id.items():
+            cmd += f" {k}={v}"
+    run_command(cmd)
 
 
 def makeDiscreteSkyMap(butler_directory='DATA', rerun='processCcdOutputs:coadd'):

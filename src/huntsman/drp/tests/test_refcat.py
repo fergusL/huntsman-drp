@@ -4,13 +4,13 @@ from requests.exceptions import HTTPError
 from contextlib import suppress
 
 
-def test_create_refcat(reference_catalogue, config, tolerance=0.2):
+def test_make_reference_catalogue(reference_catalogue, config, tolerance=0.2):
 
     # Do the cone searches
     ra_list = [30, 40]  # Make sure these aren't near RA=0
     dec_list = [-20, -30]
     try:
-        df = reference_catalogue.create_refcat(ra_list, dec_list)
+        df = reference_catalogue.make_reference_catalogue(ra_list, dec_list)
     except HTTPError as err:
         pytest.skip(f"Encountered HTTPError while testing refcat: {err}")
     assert df.shape[0] != 0  # Make sure we have some sources

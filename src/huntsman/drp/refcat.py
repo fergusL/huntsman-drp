@@ -1,3 +1,4 @@
+import os
 from tempfile import NamedTemporaryFile
 from contextlib import suppress
 import numpy as np
@@ -27,17 +28,14 @@ class TapReferenceCatalogue(HuntsmanBase):
         self._tap = TapPlus(url=self._tap_url)
 
     def cone_search(self, ra, dec, filename, radius_degrees=None):
-        """
-        Query the reference catalogue, saving output to a .csv file.
-
+        """ Query the reference catalogue, saving output to a .csv file.
         Args:
             ra (float): RA of the centre of the cone search in J2000 degrees.
             dec (float): Dec of the centre of the cone search in J2000 degrees.
             filename (str): Filename of the returned .csv file.
             radius_degrees (float, optional): Override search radius from config.
-
         Returns:
-            pandas.DataFrame: The source catalogue.
+            pd.DataFrame: The source catalogue.
         """
         if radius_degrees is None:
             radius_degrees = self._cone_search_radius
@@ -54,6 +52,8 @@ class TapReferenceCatalogue(HuntsmanBase):
                 query += f" AND {param} >= {prange['lower']}"
             with suppress(KeyError):
                 query += f" AND {param} < {prange['upper']}"
+            with suppress(KeyError):
+                query += f" AND {param} = {prange['equal']}"
 
         # Apply limit on number of returned rows
         if self._tap_limit is not None:
@@ -65,15 +65,12 @@ class TapReferenceCatalogue(HuntsmanBase):
                                    output_file=filename)
         return pd.read_csv(filename)
 
-    def create_refcat(self, ra_list, dec_list, filename=None, **kwargs):
-        """
-        Create the master reference catalogue with no source duplications.
-
+    def make_reference_catalogue(self, ra_list, dec_list, filename=None, **kwargs):
+        """ Create the master reference catalogue with no source duplications.
         Args:
             ra_list (iterable): List of RA in J2000 degrees.
             dec_list (iterable): List of Dec in J2000 degrees.
             filename (string, optional): Filename to save output catalogue.
-
         Returns:
             pandas.DataFrame: The reference catalogue.
         """
@@ -92,5 +89,6 @@ class TapReferenceCatalogue(HuntsmanBase):
                 result = pd.concat([result, df[is_new]], ignore_index=False)
         self.logger.debug(f"{result.shape[0]} sources in reference catalogue.")
         if filename is not None:
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
             result.to_csv(filename)
         return result

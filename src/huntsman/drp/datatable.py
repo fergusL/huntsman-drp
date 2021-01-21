@@ -6,6 +6,7 @@ from datetime import timedelta
 from urllib.parse import quote_plus
 
 import pandas as pd
+import numpy as np
 
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
@@ -103,6 +104,9 @@ class DataTable(HuntsmanBase):
         # Convert to a DataFrame object
         df = pd.DataFrame(list(cursor))
         self.logger.debug(f"Query returned {df.shape[0]} results.")
+
+        # Replace empty strings with nan
+        df.replace("", np.nan, inplace=True)
 
         return df
 
@@ -274,7 +278,7 @@ class RawQualityTable(DataTable):
 class MasterCalibTable(DataTable):
     """ Table to store metadata for master calibs. """
     _table_key = "master_calib"
-    _required_columns = ("filename", "calibDate")
+    _required_columns = ("filename", "calibDate")  # TODO: Move to config
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

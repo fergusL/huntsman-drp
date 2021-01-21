@@ -40,16 +40,16 @@ if __name__ == "__main__":
 
     # Get filenames of raw data
     rawdatatable = RawDataTable()
-    filenames = rawdatatable.query()["filename"].values
+    df = rawdatatable.query()
     if limit != 0:
         logger.info(f"Limiting to processing to {limit} files.")
-        filenames = filenames[:limit]
+        df = df[:limit]
 
     # Get quality metadata for files
     fn = partial(metadata_from_fits, logger=logger)
-    logger.info(f"Getting quality metadata for {len(filenames)} files.")
+    logger.info(f"Getting quality metadata for {df.shape[0]} files.")
     with Pool(nprocs, initializer=initialise_pool, initargs=(niceness,)) as pool:
-        metadata_list = pool.map(fn, filenames)
+        metadata_list = pool.map(fn, (df.iloc[_] for _ in range(df.shape[0])))
 
     # Update metadata in table
     logger.info(f"Adding quality metadata to database.")

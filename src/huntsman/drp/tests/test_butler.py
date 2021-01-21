@@ -72,7 +72,7 @@ def test_make_master_calibs(raw_data_table, temp_butler_repo, config):
 
         # Make the biases
         br.make_master_biases(calib_date=current_date(), rerun="test_rerun", ingest=True)
-        metadata_bias = br.query_calib_metadata(table="bias")
+        metadata_bias = br.query_calib_metadata(datasetType="bias")
         # Check the biases in the butler dir
         assert len(metadata_bias) == n_bias
         exptimes = set()
@@ -86,7 +86,7 @@ def test_make_master_calibs(raw_data_table, temp_butler_repo, config):
         # Make the flats, using make_master_calibs for test completeness
         br.make_master_calibs(calib_date=current_date(), rerun="test_rerun", ingest=True,
                               skip_bias=True)
-        metadata_flat = br.query_calib_metadata(table="flat")
+        metadata_flat = br.query_calib_metadata(datasetType="flat")
         # Check the flats in the butler dir
         assert len(metadata_flat) == n_flat
         filters = set()

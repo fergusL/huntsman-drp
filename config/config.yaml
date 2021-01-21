@@ -51,6 +51,7 @@ mongodb:
     raw_data: "raw_data"
     master_calib: "master_calib"
     raw_quality: "raw_quality"
+    refcat: "refcat"
 
 calibs:
   types:
@@ -69,7 +70,9 @@ refcat:
     class_star:
       lower: 0.9
     g_psf:
-      upper: 19
+      upper: 15
+    flags:
+      equal: 0
 
 screening:
   flat:
@@ -77,3 +80,6 @@ screening:
       less_than: 100
     flip_asymm_v:
       less_than: 60
+    well_fullfrac:
+      greater_than: 0.13
+      less_than: 0.19
