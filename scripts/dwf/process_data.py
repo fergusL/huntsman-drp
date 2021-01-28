@@ -4,7 +4,7 @@ from queue import Queue
 from threading import Thread
 from datetime import datetime, timedelta
 
-from huntsman.drp.datatable import RawDataTable
+from huntsman.drp.datatable import ExposureTable
 from huntsman.drp.bulter import TemporaryButlerRepository
 
 
@@ -16,7 +16,7 @@ def query_latest_files(datatable, interval):
     Get latest filenames specified by a time interval.
 
     Args:
-        datatable (`huntsman.drp.datatable.RawDataTable`): The raw data table.
+        datatable (`huntsman.drp.datatable.ExposureTable`): The raw data table.
         interval (float): The time interval in seconds.
 
     Returns:
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     # Factor these out as command line args
     interval_seconds = 60
 
-    datatable = RawDataTable()
+    datatable = ExposureTable()
     queue = Queue()
 
     # Start the queue's worker thread

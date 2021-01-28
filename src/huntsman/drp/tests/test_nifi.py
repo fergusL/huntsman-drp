@@ -5,10 +5,10 @@ import subprocess
 from huntsman.drp.utils.date import parse_date
 
 
-def test_parse_script(raw_data_table, config):
+def test_parse_script(exposure_table, config):
     """Call the script on a file and assert the printed metadata is correct."""
     # Get a raw data entry
-    raw_data = raw_data_table.query().iloc[0]
+    raw_data = exposure_table.query()[0]
     filename = raw_data["filename"]
     # Run the parsing scripy on the file
     cmd = f"python {os.environ['HUNTSMAN_DRP']}/nifi/parse_fits_metadata.py {filename}"

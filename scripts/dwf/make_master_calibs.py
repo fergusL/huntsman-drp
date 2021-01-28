@@ -2,14 +2,14 @@
 import argparse
 
 from huntsman.drp.utils.date import current_date
-from huntsman.drp.datatable import RawDataTable
+from huntsman.drp.datatable import ExposureTable
 from huntsman.drp.butler import ButlerRepository
 
 
 def get_recent_calibs(interval_days, **kwargs):
     """Get the most recent calibration images."""
 
-    datatable = RawDataTable()
+    datatable = ExposureTable()
 
     # Get bias filenames
     filenames_bias = datatable.query_latest(days=interval_days, dataType="bias",

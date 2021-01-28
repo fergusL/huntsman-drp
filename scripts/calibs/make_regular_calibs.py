@@ -10,7 +10,7 @@ from datetime import timedelta
 
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import current_date
-from huntsman.drp.datatable import RawDataTable, RawQualityTable
+from huntsman.drp.datatable import ExposureTable, RawQualityTable
 from huntsman.drp.butler import TemporaryButlerRepository
 
 
@@ -25,7 +25,7 @@ class RegularCalibMaker(HuntsmanBase):
         super().__init__(config=config, logger=logger, **kwargs)
         self.sleep_interval = sleep_interval
         self.day_range = day_range
-        self.rawtable = RawDataTable(config=self.config, logger=self.logger)
+        self.rawtable = ExposureTable(config=self.config, logger=self.logger)
         self.dqtable = RawQualityTable(config=self.config, logger=self.logger)
         self._nproc = nproc
         self._calib_types = self.config["calibs"]["types"]

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
 
-from huntsman.drp.datatable import RawDataTable
+from huntsman.drp.datatable import ExposureTable
 from huntsman.drp.quality.vignetting import calculate_asymmetry_statistics
 
 INTERVAL = 7
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     output_filename = OUTPUT_FILENAME
 
     # Get recent flat field images
-    datatable = RawDataTable()
+    datatable = ExposureTable()
     # This is a hack to cope with the non-standard field naming
     metalist = datatable.query_latest(days=interval_days, dataType="science")
     filenames = []

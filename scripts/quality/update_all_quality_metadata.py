@@ -6,7 +6,7 @@ import argparse
 from functools import partial
 from multiprocessing import Pool
 
-from huntsman.drp.datatable import RawDataTable, RawQualityTable
+from huntsman.drp.datatable import ExposureTable, RawQualityTable
 from huntsman.drp.quality import metadata_from_fits
 from huntsman.drp.core import get_logger
 
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     logger = get_logger()
 
     # Get filenames of raw data
-    rawdatatable = RawDataTable()
+    rawdatatable = ExposureTable()
     df = rawdatatable.query()
     if limit != 0:
         logger.info(f"Limiting to processing to {limit} files.")

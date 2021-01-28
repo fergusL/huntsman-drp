@@ -27,12 +27,12 @@ def test_temp_repo(temp_butler_repo):
         assert getattr(temp_butler_repo, a) is None
 
 
-def test_ingest(raw_data_table, butler_repos, config):
+def test_ingest(exposure_table, butler_repos, config):
     """Test ingest for each Butler repository."""
     config = config["exposure_sequence"]
     n_filters = len(config["filters"])
 
-    filenames = raw_data_table.query()["filename"].values
+    filenames = exposure_table.query(key="filename")
     for butler_repo in butler_repos:
         with butler_repo as br:
 
@@ -58,7 +58,7 @@ def test_ingest(raw_data_table, butler_repos, config):
             assert len(data_ids) == n_bias
 
 
-def test_make_master_calibs(raw_data_table, temp_butler_repo, config):
+def test_make_master_calibs(exposure_table, temp_butler_repo, config):
     """ Make sure the correct number of master bias frames are produced."""
     test_config = config["exposure_sequence"]
     n_filters = len(test_config["filters"])
@@ -66,7 +66,7 @@ def test_make_master_calibs(raw_data_table, temp_butler_repo, config):
     n_flat = test_config["n_cameras"] * n_filters
 
     # Use the Butler repo to make the calibs
-    filenames = raw_data_table.query()["filename"].values
+    filenames = exposure_table.query(key="filename")
     with temp_butler_repo as br:
         br.ingest_raw_data(filenames)
 
@@ -102,8 +102,10 @@ def test_make_master_calibs(raw_data_table, temp_butler_repo, config):
         # Check the calibs in the archive
         master_calib_table = MasterCalibTable(config=config)
         calib_metadata = master_calib_table.query()
-        assert calib_metadata.shape[0] == n_flat + n_bias
-        assert (calib_metadata["datasetType"].values == "flat").sum() == n_flat
-        assert (calib_metadata["datasetType"].values == "bias").sum() == n_bias
-        for filename in calib_metadata["filename"].values:
+        filenames = [c["filename"] for c in calib_metadata]
+        datasettypes = [c["datasetType"] for c in calib_metadata]
+        assert len(calib_metadata) == n_flat + n_bias
+        assert sum([c == "flat" for c in datasettypes]) == n_flat
+        assert sum([c == "bias" for c in datasettypes]) == n_bias
+        for filename in filenames:
             assert os.path.isfile(filename)

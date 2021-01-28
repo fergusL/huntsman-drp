@@ -37,24 +37,12 @@ def _apply_operation(func, metadata):
         raise TypeError(f"Invalid metadata type: {type(metadata)}.")
 
 
-def require_unlocked(func):
-    """ Raise a PermissionError if the function is called when the table is locked. """
-
-    def _require_unlocked(self, *args, **kwargs):
-        if self.is_locked:
-            raise PermissionError(f"{self} must be unlocked to call {func.__name__}. To unlock,"
-                                  "call the `unlock` method.")
-        return func(self, *args, **kwargs)
-    return _require_unlocked
-
-
 class DataTable(HuntsmanBase):
-    """ The primary goal of DataTable objects is to provide a minimal, easily-configurable and
-    user-friendly interface between the mongo database and the DRP that enforces standardisation
-    of new documents. """
+    """ This class is used to interface with the mongodb. It is responsible for performing queries
+    and inserting/updating/deleting documents, as well as validating new documents.
+    """
     _required_columns = None
-    _unique_columns = ("filename", )  # Required to identify a unique document
-    is_locked = False
+    _unique_columns = "filename",  # Required to identify a unique document
 
     def __init__(self, **kwargs):
         HuntsmanBase.__init__(self, **kwargs)
@@ -63,97 +51,9 @@ class DataTable(HuntsmanBase):
         # Initialise the DB
         self._table_name = self.config["mongodb"]["tables"][self._table_key]
         db_name = self.config["mongodb"]["db_name"]
-        self._initialise(db_name, self._table_name)
+        self._connect(db_name, self._table_name)
 
-    def lock(self):
-        self.is_locked = True
-
-    def unlock(self):
-        self.is_locked = False
-
-    def query(self, criteria=None, date_start=None, date_end=None, date=None):
-        """ Get data for one or more matches in the table.
-        Args:
-            criteria (dict, optional): The query criteria.
-            date_start (object, optional): The start of the queried date range.
-            date_end (object, optional):  The end of the queried date range.
-            date (object, optional): The exact date to query on.
-        Returns:
-            pd.DataFrame: The query result.
-        """
-        if criteria is None:
-            criteria = {}
-
-        # Add date range to criteria if given
-        date_criteria = {}
-        if date_start is not None:
-            date_criteria.update({"greater_than_equals": parse_date(date_start)})
-        if date_end is not None:
-            date_criteria.update({"less_than": parse_date(date_end)})
-        if date is not None:
-            date_criteria.update({"equals": parse_date(date)})
-        if date_criteria:
-            criteria = deepcopy(criteria)
-            criteria[self._date_key] = date_criteria
-
-        # Perform the query
-        self.logger.debug(f"Performing query with criteria: {criteria}.")
-        criteria = QueryCriteria(criteria).to_mongo()
-        cursor = self._table.find(criteria)
-
-        # Convert to a DataFrame object
-        df = pd.DataFrame(list(cursor))
-        self.logger.debug(f"Query returned {df.shape[0]} results.")
-
-        # Replace empty strings with nan
-        df.replace("", np.nan, inplace=True)
-
-        return df
-
-    def query_latest(self, days=0, hours=0, seconds=0, criteria=None):
-        """ Convenience function to query the latest files in the db.
-        Args:
-            days (int): default 0.
-            hours (int): default 0.
-            seconds (int): default 0.
-            criteria (dict, optional): Criteria for the query.
-        Returns:
-            list: Query result.
-        """
-        date_now = current_date()
-        date_start = date_now - timedelta(days=days, hours=hours, seconds=seconds)
-        return self.query(date_start=date_start, criteria=criteria)
-
-    @require_unlocked
-    def insert(self, metadata, overwrite=False):
-        """ Insert a new document into the table after ensuring it is valid and unique.
-        Args:
-            data_id (dict): The dictionary specifying the single document to delete.
-            overwrite (bool): If True, will overwrite the existing document for this dataId.
-        """
-        fn = partial(self._insert_one, overwrite=overwrite)
-        return _apply_operation(fn, metadata)
-
-    @require_unlocked
-    def update(self, metadata, upsert=False):
-        """ Update a single document in the table.
-        Args:
-            data_id (dict): The data ID of the document to update.
-            metadata (dict): The new metadata to be inserted.
-            upsert (bool): If True, will create a new document if there is no matching entry.
-        """
-        fn = partial(self._update_one, upsert=upsert)
-        return _apply_operation(fn, metadata)
-
-    @require_unlocked
-    def delete(self, metadata):
-        """ Delete one document from the table.
-        Args:
-            data_id (dict): The dictionary specifying the single document to delete.
-        """
-        return _apply_operation(self._delete_one, metadata)
-
-    def _initialise(self, db_name, table_name):
+    def _connect(self, db_name, table_name):
         """ Initialise the database.
         Args:
             db_name (str): The name of the (mongo) database.
@@ -171,12 +71,105 @@ class DataTable(HuntsmanBase):
             self._client = MongoClient(hostname, port)
         try:
             self._client.server_info()
-            self.logger.debug(f"Connected to mongodb at {hostname}:{port}.")
+            self.logger.info(f"Connected to mongodb at {hostname}:{port}.")
         except ServerSelectionTimeoutError as err:
             self.logger.error(f"Unable to connect to mongodb at {hostname}:{port}.")
             raise err
         self._db = self._client[db_name]
         self._table = self._db[table_name]
+
+    def query(self, criteria=None, date_start=None, date_end=None, date=None, key=None):
+        """ Get data for one or more matches in the table.
+        Args:
+            criteria (dict, optional): The query criteria.
+            date_start (object, optional): The start of the queried date range.
+            date_end (object, optional):  The end of the queried date range.
+            date (object, optional): The exact date to query on.
+        Returns:
+            pd.DataFrame: The query result.
+        """
+        if criteria is None:
+            criteria = {}
+
+        # Add date range to criteria if provided
+        date_criteria = {}
+        if date_start is not None:
+            date_criteria.update({"greater_than_equals": parse_date(date_start)})
+        if date_end is not None:
+            date_criteria.update({"less_than": parse_date(date_end)})
+        if date is not None:
+            date_criteria.update({"equals": parse_date(date)})
+        if date_criteria:
+            criteria = deepcopy(criteria)
+            criteria[self._date_key] = date_criteria
+
+        # Perform the query
+        self.logger.debug(f"Performing query with criteria: {criteria}.")
+        criteria = QueryCriteria(criteria).to_mongo()
+        result = list(self._table.find(criteria))
+        self.logger.debug(f"Query returned {len(result)} results.")
+
+        if key is not None:
+            result = np.array([d[key] for d in result])
+
+        return result
+
+    def query_latest(self, days=0, hours=0, seconds=0, criteria=None, **kwargs):
+        """ Convenience function to query the latest files in the db.
+        Args:
+            days (int): default 0.
+            hours (int): default 0.
+            seconds (int): default 0.
+            criteria (dict, optional): Criteria for the query.
+        Returns:
+            list: Query result.
+        """
+        date_now = current_date()
+        date_start = date_now - timedelta(days=days, hours=hours, seconds=seconds)
+        return self.query(date_start=date_start, criteria=criteria, **kwargs)
+
+    def get_metrics(self, *args, **kwargs):
+        """
+        """
+        documents = self.query_latest(*args, **kwargs)
+
+        # Convert to a DataFrame object
+        df = pd.DataFrame([d["metrics"] for d in documents])
+
+        # Replace empty strings with nan
+        df.replace("", np.nan, inplace=True)
+
+        # Add columns required to identify files
+        for key in self._unique_columns:
+            df[key] = [d[key] for d in documents]
+
+        return df
+
+    def insert(self, metadata, overwrite=False):
+        """ Insert a new document into the table.
+        Args:
+            data_id (dict): The dictionary specifying the single document to delete.
+            overwrite (bool): If True, will overwrite the existing document for this dataId.
+        """
+        fn = partial(self._insert_one, overwrite=overwrite)
+        return _apply_operation(fn, metadata)
+
+    def update(self, metadata, upsert=False):
+        """ Update a single document in the table.
+        Args:
+            data_id (dict): The data ID of the document to update.
+            metadata (dict): The new metadata to be inserted.
+            upsert (bool): If True, will create a new document if there is no matching entry.
+        """
+        fn = partial(self._update_one, upsert=upsert)
+        return _apply_operation(fn, metadata)
+
+    def delete(self, metadata):
+        """ Delete one document from the table.
+        Args:
+            data_id (dict): The dictionary specifying the single document to delete.
+        """
+        return _apply_operation(self._delete_one, metadata)
 
     def _insert_one(self, metadata, overwrite):
         """ Insert a new document into the table after ensuring it is valid and unique.
@@ -193,14 +186,14 @@ class DataTable(HuntsmanBase):
         # Check for matches in data table
         unique_id = self._get_unique_id(metadata)
         query_result = self.query(criteria=self._get_unique_id(metadata))
-        query_count = query_result.shape[0]
+        query_count = len(query_result)
 
         if query_count == 1:
             if overwrite:
                 self.delete(query_result)
             else:
-                raise ValueError(f"Found existing document for {unique_id} in {self}."
-                                 " Pass overwrite=True to overwrite.")
+                raise RuntimeError(f"Found existing document for {unique_id} in {self}."
+                                   " Pass overwrite=True to overwrite.")
         elif query_count != 0:
             raise ValueError(f"Multiple matches found for document in {self}: {unique_id}.")
 
@@ -218,7 +211,7 @@ class DataTable(HuntsmanBase):
             upsert (bool): If True, will create a new document if there is no matching entry.
         """
         data_id = self._get_unique_id(metadata)
-        query_count = self.query(criteria=data_id).shape[0]
+        query_count = len(self.query(criteria=data_id))
         if query_count > 1:
             raise RuntimeError(f"data ID matches with more than one document: {data_id}.")
         elif query_count == 0:
@@ -237,7 +230,7 @@ class DataTable(HuntsmanBase):
         Args:
             data_id (dict): The dictionary specifying the single document to delete.
         """
-        query_count = self.query(criteria=data_id).shape[0]
+        query_count = len(self.query(criteria=data_id))
         if query_count > 1:
             raise RuntimeError(f"Metadata matches with more than one document: {data_id}.")
         elif query_count == 0:
@@ -257,22 +250,13 @@ class DataTable(HuntsmanBase):
         return encode_mongo_value({k: metadata[k] for k in self._unique_columns})
 
 
-class RawDataTable(DataTable):
-    """Table to store metadata for raw data synced via NiFi from Huntsman."""
+class ExposureTable(DataTable):
+    """ Table to store metadata for Huntsman exposures. """
     _table_key = "raw_data"
-    is_locked = True
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._required_columns = self.config["fits_header"]["required_columns"]
-
-
-class RawQualityTable(DataTable):
-    """ Table to store data quality metadata for raw data. """
-    _table_key = "raw_quality"
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
 
 
 class MasterCalibTable(DataTable):

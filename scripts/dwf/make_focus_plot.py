@@ -4,7 +4,7 @@ Make focus position plot for recent science images.
 import matplotlib.pyplot as plt
 import numpy as np
 
-from huntsman.drp.datatable import RawDataTable
+from huntsman.drp.datatable import ExposureTable
 
 INTERVAL = 7
 OUTPUT_FILENAME = "focus_positions.png"
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     output_filename = OUTPUT_FILENAME
 
     # Get recent science images
-    datatable = RawDataTable()
+    datatable = ExposureTable()
     # This is a hack to cope with the non-standard field naming
     metalist = datatable.query_latest(days=interval_days, dataType="science")
     focus_positions = []
