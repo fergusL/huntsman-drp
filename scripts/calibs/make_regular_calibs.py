@@ -60,7 +60,7 @@ class RegularCalibMaker(HuntsmanBase):
 
                 # Get all filenames for this data type
                 criteria_raw = {self._data_type_key: calib_type}
-                filenames_raw = self.rawtable.query(
+                filenames_raw = self.rawtable.find(
                                     date_start=date_start,
                                     date_end=date_end,
                                     criteria=criteria_raw)[self._filename_key].values
@@ -72,7 +72,7 @@ class RegularCalibMaker(HuntsmanBase):
                 self.logger.debug(f"Screening data type={calib_type} with criteria: {screenconf}.")
 
                 # Get filenames that satisfy screening criteria
-                query_result = self.dqtable.query(criteria=criteria_qual)
+                query_result = self.dqtable.find(criteria=criteria_qual)
                 self.logger.info(f"{query_result.shape[0]} raw files passed screening for"
                                  f" {self._data_type_key}: {calib_type}.")
                 filenames = query_result[self._filename_key].values

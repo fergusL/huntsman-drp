@@ -2,6 +2,7 @@ import os
 
 from huntsman.drp.utils.date import current_date
 from huntsman.drp.datatable import MasterCalibTable
+from huntsman.drp.utils.testing import create_test_bulter_repository
 
 
 def test_initialise(butler_repos):
@@ -11,20 +12,22 @@ def test_initialise(butler_repos):
             for dir in [butler_repo.butler_directory, butler_repo.calib_directory]:
                 assert os.path.isdir(dir)
                 assert "_mapper" in os.listdir(dir)
-            assert butler_repo.butler is not None
+            assert butler_repo.get_butler() is not None
 
 
 def test_temp_repo(temp_butler_repo):
     """Test the temp butler repo behaves as expected"""
-    attrs = ["butler", "butler_directory", "calib_directory"]
+    attrs = ["butler_directory", "calib_directory"]
     for a in attrs:
         assert getattr(temp_butler_repo, a) is None
     with temp_butler_repo:
         for a in attrs:
             assert getattr(temp_butler_repo, a) is not None
+        assert temp_butler_repo.get_butler() is not None
     # Now check things have been cleaned up properly
     for a in attrs:
         assert getattr(temp_butler_repo, a) is None
+        assert len(temp_butler_repo._butlers) == 0
 
 
 def test_ingest(exposure_table, butler_repos, config):
@@ -32,29 +35,31 @@ def test_ingest(exposure_table, butler_repos, config):
     config = config["exposure_sequence"]
     n_filters = len(config["filters"])
 
-    filenames = exposure_table.query(key="filename")
+    filenames = exposure_table.find(key="filename")
     for butler_repo in butler_repos:
         with butler_repo as br:
 
+            butler = br.get_butler()
+
             # Count the number of ingested files
-            data_ids = br.butler.queryMetadata('raw', ['visit', 'ccd'])
+            data_ids = butler.queryMetadata('raw', ['visit', 'ccd'])
             assert len(data_ids) == 0
             br.ingest_raw_data(filenames)
-            data_ids = br.butler.queryMetadata('raw', ['visit', 'ccd'])
+            data_ids = butler.queryMetadata('raw', ['visit', 'ccd'])
             assert len(data_ids) == len(filenames)
 
             # Check we have the right number of each datatype
             n_flat = config["n_cameras"] * config["n_days"] * config["n_flat"] * n_filters
-            data_ids = br.butler.queryMetadata('raw', ['visit', 'ccd'],
-                                               dataId={"dataType": "flat"})
+            data_ids = butler.queryMetadata('raw', ['visit', 'ccd'],
+                                            dataId={"dataType": "flat"})
             assert len(data_ids) == n_flat
             n_sci = config["n_cameras"] * config["n_days"] * config["n_science"] * n_filters
-            data_ids = br.butler.queryMetadata('raw', ['visit', 'ccd'],
-                                               dataId={"dataType": "science"})
+            data_ids = butler.queryMetadata('raw', ['visit', 'ccd'],
+                                            dataId={"dataType": "science"})
             assert len(data_ids) == n_sci
             n_bias = config["n_cameras"] * config["n_days"] * config["n_bias"] * 2  # 2 exp times
-            data_ids = br.butler.queryMetadata('raw', ['visit', 'ccd'],
-                                               dataId={"dataType": "bias"})
+            data_ids = butler.queryMetadata('raw', ['visit', 'ccd'],
+                                            dataId={"dataType": "bias"})
             assert len(data_ids) == n_bias
 
 
@@ -66,14 +71,18 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
     n_flat = test_config["n_cameras"] * n_filters
 
     # Use the Butler repo to make the calibs
-    filenames = exposure_table.query(key="filename")
+    filenames = exposure_table.find(key="filename")
     with temp_butler_repo as br:
         br.ingest_raw_data(filenames)
 
-        # Make the biases
-        br.make_master_biases(calib_date=current_date(), rerun="test_rerun", ingest=True)
-        metadata_bias = br.query_calib_metadata(datasetType="bias")
+        # Make the calibs
+        br.make_master_calibs(calib_date=current_date(), rerun="test_rerun", ingest=True)
+
+        # Archive the calibs
+        br.archive_master_calibs()
+
         # Check the biases in the butler dir
+        metadata_bias = br.query_calib_metadata(datasetType="bias")
         assert len(metadata_bias) == n_bias
         exptimes = set()
         ccds = set()
@@ -83,11 +92,8 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         assert len(exptimes) == 2
         assert len(ccds) == test_config["n_cameras"]
 
-        # Make the flats, using make_master_calibs for test completeness
-        br.make_master_calibs(calib_date=current_date(), rerun="test_rerun", ingest=True,
-                              skip_bias=True)
-        metadata_flat = br.query_calib_metadata(datasetType="flat")
         # Check the flats in the butler dir
+        metadata_flat = br.query_calib_metadata(datasetType="flat")
         assert len(metadata_flat) == n_flat
         filters = set()
         ccds = set()
@@ -97,11 +103,9 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         assert len(filters) == 2
         assert len(ccds) == test_config["n_cameras"]
 
-        # Archive the calibs
-        br.archive_master_calibs()
         # Check the calibs in the archive
         master_calib_table = MasterCalibTable(config=config)
-        calib_metadata = master_calib_table.query()
+        calib_metadata = master_calib_table.find()
         filenames = [c["filename"] for c in calib_metadata]
         datasettypes = [c["datasetType"] for c in calib_metadata]
         assert len(calib_metadata) == n_flat + n_bias
@@ -109,3 +113,13 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         assert sum([c == "bias" for c in datasettypes]) == n_bias
         for filename in filenames:
             assert os.path.isfile(filename)
+
+
+def test_make_calexp(tmpdir):
+    """ Test that we can make calibrated exposures. """
+    br = create_test_bulter_repository(str(tmpdir))
+    br.make_master_calibs()
+    br.make_calexps()
+    calexps, data_ids = br.get_calexps()
+    assert len(calexps) == 1
+    assert len(data_ids) == 1

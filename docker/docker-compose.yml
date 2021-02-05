@@ -1,7 +1,34 @@
 version: '3'
+
+volumes:
+  obs_huntsman:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${OBS_HUNTSMAN}
+      o: bind
+  huntsman_drp:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${HUNTSMAN_DRP}
+      o: bind
+  huntsman_mount:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${HUNTSMAN_MOUNT}
+      o: bind
+  huntsman_datadir:
+    driver: local
+    driver_opts:
+      type: none
+      device: /data/nifi/huntsman_priv
+      o: bind
+
 services:
   lsst_stack:
-    image: huntsmanarray/drp:develop
+    image: huntsmanarray/drp-lsst:develop
     logging:
       driver: "none"
     build:
@@ -9,16 +36,28 @@ services:
     network_mode: "host"
     stdin_open: true
     tty: true
-    ports:
-      - "9888:9888"
-      - "9889:9889"
-      - "9890:9890"
     volumes:
-      - ${OBS_HUNTSMAN}:/opt/lsst/software/stack/obs_huntsman
-      - ${HUNTSMAN_DRP}:/opt/lsst/software/stack/huntsman-drp
-      - ${HUNTSMAN_MOUNT}:${HUNTSMAN_MOUNT}
-      - /data/nifi/huntsman_priv:/data/nifi/huntsman_priv
+      - obs_huntsman:/opt/lsst/software/stack/obs_huntsman
+      - huntsman_drp:/opt/lsst/software/stack/huntsman-drp
+      - huntsman_mount:${HUNTSMAN_MOUNT}
+      - huntsman_datadir:/data/nifi/huntsman_priv
     environment:
       - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
       - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
       - HUNTSMAN_MOUNT=${HUNTSMAN_MOUNT}
+
+  data-quality-monitor:
+    image: huntsmanarray/drp-lsst:develop
+    network_mode: "host"
+    stdin_open: true
+    tty: true
+    volumes:
+      - obs_huntsman:/opt/lsst/software/stack/obs_huntsman
+      - huntsman_drp:/opt/lsst/software/stack/huntsman-drp
+      - huntsman_mount:${HUNTSMAN_MOUNT}
+      - huntsman_datadir:/data/nifi/huntsman_priv
+    environment:
+      - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
+      - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
+      - HUNTSMAN_MOUNT=${HUNTSMAN_MOUNT}
+    command: python /opt/lsst/software/stack/huntsman-drp/scripts/quality/data-quality-monitor.py

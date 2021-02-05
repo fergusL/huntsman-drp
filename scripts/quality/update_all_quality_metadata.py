@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
     # Get filenames of raw data
     rawdatatable = ExposureTable()
-    df = rawdatatable.query()
+    df = rawdatatable.find()
     if limit != 0:
         logger.info(f"Limiting to processing to {limit} files.")
         df = df[:limit]

@@ -19,7 +19,7 @@ if __name__ == "__main__":
     # Get recent science images
     datatable = ExposureTable()
     # This is a hack to cope with the non-standard field naming
-    metalist = datatable.query_latest(days=interval_days, dataType="science")
+    metalist = datatable.find_latest(days=interval_days, dataType="science")
     focus_positions = []
     ccd_names = []
     for m in metalist:

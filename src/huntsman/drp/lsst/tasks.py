@@ -10,7 +10,7 @@ from lsst.utils import getPackageDir
 
 from huntsman.drp.core import get_logger
 from huntsman.drp.utils.date import date_to_ymd
-from huntsman.drp.utils.butler import get_unique_calib_ids, fill_calib_keys
+from huntsman.drp.lsst.utils.butler import get_unique_calib_ids, fill_calib_keys
 from huntsman.drp.lsst.ingest_refcat_task import HuntsmanIngestIndexedReferenceTask
 
 
@@ -23,8 +23,8 @@ def run_command(cmd, logger=None):
     return subprocess.run(cmd, shell=True, check=True)
 
 
-def ingest_raw_data(filename_list, butler_directory, mode="link", ignore_ingested=False):
-    """
+def ingest_raw_data(filename_list, butler_directory, mode="link", ignore_ingested=True):
+    """ Ingest raw files into a butler repository.
 
     """
     # Create the ingest task
@@ -81,8 +81,8 @@ def ingest_master_calibs(datasetType, filenames, butler_directory, calib_directo
     run_command(cmd)
 
 
-def make_master_calibs(datasetType, data_ids, calib_date, butler_repository, rerun, nodes=1,
-                       procs=1):
+def make_master_calibs(datasetType, data_ids, calib_date, butler, butler_directory, calib_directory,
+                       rerun, nodes=1, procs=1):
     """
     Use constructBias.py to construct master bias frames for the data_ids. The master calibs are
     produced for each unique calibId obtainable from the list of dataIds.
@@ -109,21 +109,21 @@ def make_master_calibs(datasetType, data_ids, calib_date, butler_repository, rer
     data_ids = copy.deepcopy(data_ids)
     for data_id in data_ids:
         # Fill required missing keys
-        data_id.update(fill_calib_keys(data_id, datasetType, butler=butler_repository.butler,
+        data_id.update(fill_calib_keys(data_id, datasetType, butler=butler,
                                        keys_ignore=["calibDate"]))
         # Add the calib date to the dataId
         data_id["calibDate"] = calib_date
 
     # For some reason we have to run each calibId separately
-    unique_calib_ids = get_unique_calib_ids(datasetType, data_ids, butler=butler_repository.butler)
+    unique_calib_ids = get_unique_calib_ids(datasetType, data_ids, butler=butler)
     for calib_id in unique_calib_ids:
 
         # Get data_ids corresponding to this calib_id
         data_id_subset = [d for d in data_ids if calib_id.items() <= d.items()]
 
         # Construct the command
-        cmd = f"{script_name} {butler_repository.butler_directory} --rerun {rerun}"
-        cmd += f" --calib {butler_repository.calib_directory}"
+        cmd = f"{script_name} {butler_directory} --rerun {rerun}"
+        cmd += f" --calib {calib_directory}"
         for data_id in data_id_subset:
             cmd += " --id"
             for k, v in data_id.items():
@@ -135,7 +135,8 @@ def make_master_calibs(datasetType, data_ids, calib_date, butler_repository, rer
         run_command(cmd)
 
 
-def make_calexps(data_ids, rerun, butler_directory, calib_directory, no_exit=True, procs=1):
+def make_calexps(data_ids, rerun, butler_directory, calib_directory, no_exit=True, procs=1,
+                 clobber_config=False):
     """ Make calibrated exposures (calexps) using the LSST stack. These are astrometrically
     and photometrically calibrated as well as background subtracted. There are several byproducts
     of making calexps including sky background maps and preliminary source catalogues and metadata,
@@ -159,6 +160,8 @@ def make_calexps(data_ids, rerun, butler_directory, calib_directory, no_exit=Tru
         cmd += " --id"
         for k, v in data_id.items():
             cmd += f" {k}={v}"
+    if clobber_config:
+        cmd += " --clobber-config"
     run_command(cmd)
 
 

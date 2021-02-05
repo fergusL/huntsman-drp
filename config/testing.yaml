@@ -1,3 +1,6 @@
+directories:
+  testdata: ${HUNTSMAN_DRP}/tests/data
+
 exposure_sequence:
   start_date: "2020-02-04"
   n_cameras: 2

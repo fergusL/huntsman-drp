@@ -22,42 +22,59 @@ fits_header:
     - "visit"
     - "ccd"
 
-camera_mappings:
-  "1815420013090900": 1
-  "371d420013090900": 2
-  "0e2c420013090900": 3
-  "0f1d420013090900": 4
-  "361d420013090900": 5
-  "3528420013090900": 6
-  "370d420013090900": 7
-  "1919420013090900": 8
-  "2d194b0013090900": 9
-  "2014420013090900": 10
-  "83F010774": 11
-  "83F011167": 12
-  "83F011791": 13
-  "83F010801": 14
-  "83F011758": 15
-  "83F011810": 16
-  "TESTCAM01": 17
-  "TESTCAM02": 18
+cameras:
+  plate_scale: 527.54167  # arcsec/mm
+  default_preset: "zwo"
+  presets:
+    zwo:
+      width: 5496
+      height: 3672
+      saturation: 4095
+      gain: 1.145
+      read_noise: 2.4
+      pixel_size: 0.0024  # mm (?)
+      overscan: 0
+  devices:
+    - camera_name: "1815420013090900"
+    - camera_name: "371d420013090900"
+    - camera_name: "0e2c420013090900"
+    - camera_name: "0f1d420013090900"
+    - camera_name: "361d420013090900"
+    - camera_name: "3528420013090900"
+    - camera_name: "370d420013090900"
+    - camera_name: "1919420013090900"
+    - camera_name: "2d194b0013090900"
+    - camera_name: "2014420013090900"
+    - camera_name: "TESTCAM01"
+      width: 100
+      height: 100
+    - camera_name: "TESTCAM02"
+      width: 100
+      height: 100
+    - camera_name: "TESTCAM03"
+      width: 800
+      height: 800
 
 mongodb:
   hostname: "localhost"
   port: 27017
   db_name: "huntsman"
   date_key: "date"
-  tables:
-    raw_data: "raw_data"
-    master_calib: "master_calib"
-    raw_quality: "raw_quality"
-    refcat: "refcat"
 
 calibs:
   types:
     - flat
     - bias
+    - dark
   validity: 1000
+  matching_columns:  # These columns are for matching raw calibs with raw science frames
+    flat:
+      - filter
+      - ccd
+    bias:
+      - ccd
+    dark:
+      - ccd
 
 refcat:
   tap_url: http://api.skymapper.nci.org.au/aus/tap/

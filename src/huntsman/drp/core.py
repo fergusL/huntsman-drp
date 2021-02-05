@@ -39,12 +39,13 @@ def get_config(config_dir=None, ignore_local=False, parse=True, testing=False):
     """
 
     """
+    try:
+        rootdir = os.environ["HUNTSMAN_DRP"]
+    except KeyError:
+        raise KeyError("HUNTSMAN_DRP environment variable not set."
+                       " Unable to determine config directory.")
     if config_dir is None:
-        try:
-            config_dir = os.path.join(os.environ["HUNTSMAN_DRP"], "config")
-        except KeyError:
-            raise KeyError("HUNTSMAN_DRP environment variable not set."
-                           " Unable to determine config directory.")
+        config_dir = os.path.join(os.environ["HUNTSMAN_DRP"], "config")
     config = _load_yaml(os.path.join(config_dir, "config.yaml"))
 
     # Update the config with testing version
@@ -61,6 +62,8 @@ def get_config(config_dir=None, ignore_local=False, parse=True, testing=False):
     # Parse the config
     if parse:
         config["directories"] = _parse_directories(config["directories"])
+    config["directories"]["root"] = rootdir
+
     return config
 
 

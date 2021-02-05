@@ -1,5 +1,7 @@
 import os
 import copy
+import json
+
 from lsst.daf.persistence import FsScanner
 
 
@@ -98,3 +100,58 @@ def get_unique_calib_ids(calib_type, data_ids, butler):
     unique_calib_ids = [{k: v for k, v in zip(calib_keys, vs)} for vs in unique_calib_values]
 
     return unique_calib_ids
+
+
+def get_missing_data_ids(data_ids, required_data_ids):
+    """ Find any data_ids that are not present in data_ids_required. This is tricky as dict
+    objects are not hashable and we cannot use the "set" functionality directly. We therefore
+    serialise the dicts to str following this method:
+    https://stackoverflow.com/questions/11092511/python-list-of-unique-dictionaries
+    Args:
+        data_ids (list of dict): The dataIds to check.
+        required_data_ids (list of dict): The dataIds required to exist in data_ids. Any dataId
+            that is not present in data_ids_required is returned.
+    Returns:
+        list of dict: List of unique data_ids that are not in data_ids_required.
+    """
+    data_ids_json = set([json.dumps(_, sort_keys=True) for _ in data_ids])
+    data_ids_required_json = set([json.dumps(_, sort_keys=True) for _ in required_data_ids])
+    missing_ids_json = data_ids_required_json - data_ids_json
+    return [json.loads(_) for _ in missing_ids_json]
+
+
+def data_id_to_calib_id(datasetType, data_ids, butler, keys_ignore=None):
+    """ Convert a list of dataIds to corresponding list of calibIds. TODO: Figure out if this
+    functionality already exists somewhere in the LSST stack.
+    Args:
+        datasetType (str): The dataset type, e.g. bias or flat.
+        data_ids (list of dict): The dataIds to convert to calibIds.
+        keys_ignore (list of str, optional): If given, the returned calibIds will not contain
+            any of the keys listed in keys_ignore.
+    Returns:
+        list of dict: The corresponding calibIds.
+    """
+    calib_keys = list(butler.getKeys(datasetType).keys())
+    if keys_ignore is not None:
+        calib_keys = [k for k in calib_keys if k not in keys_ignore]
+    calib_ids = [{k: data_id[k] for k in calib_keys} for data_id in data_ids]
+    return calib_ids
+
+
+def get_data_ids(butler, datasetType, dataId=None, extra_keys=None):
+    """ Get dataIds for datasetType.
+    Args:
+        butler (butler): The butler object.
+        datasetType (str): The datasetType (raw, bias, flat etc.).
+        dataId (dict, optional): A complete or partial dataId to match with.
+        extra_keys (list, optional): List of additional keys to be included in the dataIds.
+    Returns:
+        list of dict: A list of dataIds.
+    """
+    keys = list(butler.getKeys(datasetType).keys())
+    if extra_keys is not None:
+        keys.extend(extra_keys)
+
+    value_list = butler.queryMetadata(datasetType, format=keys, dataId=dataId)
+
+    return [{k: v for k, v in zip(keys, _)} for _ in value_list]

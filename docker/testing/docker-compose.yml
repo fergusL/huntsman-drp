@@ -8,7 +8,7 @@ services:
     logging:
         driver: none
   python_tests:
-    image: huntsmanarray/drp:develop
+    image: huntsmanarray/drp-lsst:develop
     depends_on:
     - mongo
     build:

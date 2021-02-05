@@ -1,40 +1,17 @@
 """Code to interface with the Huntsman mongo database."""
-from collections import abc
 from copy import deepcopy
-from functools import partial
 from datetime import timedelta
 from urllib.parse import quote_plus
 
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import current_date, parse_date
-from huntsman.drp.utils.query import QueryCriteria, encode_mongo_value
-
-
-def _apply_operation(func, metadata):
-    """ Apply a function to the metadata. metadata can either be a mappable, in which case the
-    function is called with metadata as its first argument, an iterable, in which case the function
-    will be successively applied to each of its items (assumed to be mappings), or a pd.DataFrame,
-    in which case the function will be applied to each of its rows.
-    Args:
-        func (Function): The function to apply.
-        metadata (pd.DataFrame, abc.Mapping or abc.Iterable): The metadata to process.
-    """
-    if isinstance(metadata, pd.DataFrame):
-        for _, item in metadata.iterrows():
-            func(encode_mongo_value(item))
-    elif isinstance(metadata, abc.Mapping):
-        func(encode_mongo_value(metadata))
-    elif isinstance(metadata, abc.Iterable):
-        for item in metadata:
-            func(encode_mongo_value(item))
-    else:
-        raise TypeError(f"Invalid metadata type: {type(metadata)}.")
+from huntsman.drp.utils.query import Query
+from huntsman.drp.utils.mongo import encode_mongo_query
 
 
 class DataTable(HuntsmanBase):
@@ -44,12 +21,13 @@ class DataTable(HuntsmanBase):
     _required_columns = None
     _unique_columns = "filename",  # Required to identify a unique document
 
-    def __init__(self, **kwargs):
+    def __init__(self, table_name, **kwargs):
         HuntsmanBase.__init__(self, **kwargs)
+
         self._date_key = self.config["mongodb"]["date_key"]
+        self._table_name = table_name
 
         # Initialise the DB
-        self._table_name = self.config["mongodb"]["tables"][self._table_key]
         db_name = self.config["mongodb"]["db_name"]
         self._connect(db_name, self._table_name)
 
@@ -78,7 +56,15 @@ class DataTable(HuntsmanBase):
         self._db = self._client[db_name]
         self._table = self._db[table_name]
 
-    def query(self, criteria=None, date_start=None, date_end=None, date=None, key=None):
+    def count_documents(self, document_filter=None):
+        """
+        """
+        if document_filter is None:
+            document_filter = {}
+        return self._table.count_documents(document_filter)
+
+    def find(self, document_filter=None, constraints=None, date_start=None, date_end=None,
+             date=None, key=None):
         """ Get data for one or more matches in the table.
         Args:
             criteria (dict, optional): The query criteria.
@@ -88,25 +74,25 @@ class DataTable(HuntsmanBase):
         Returns:
             pd.DataFrame: The query result.
         """
-        if criteria is None:
-            criteria = {}
+        if constraints is None:
+            constraints = {}
+        constraints = deepcopy(constraints)
 
         # Add date range to criteria if provided
-        date_criteria = {}
+        constraint = {}
         if date_start is not None:
-            date_criteria.update({"greater_than_equals": parse_date(date_start)})
+            constraint.update({"greater_than_equal": parse_date(date_start)})
         if date_end is not None:
-            date_criteria.update({"less_than": parse_date(date_end)})
+            constraint.update({"less_than": parse_date(date_end)})
         if date is not None:
-            date_criteria.update({"equals": parse_date(date)})
-        if date_criteria:
-            criteria = deepcopy(criteria)
-            criteria[self._date_key] = date_criteria
+            constraint.update({"equal": parse_date(date)})
+        constraints[self._date_key] = constraint
 
-        # Perform the query
-        self.logger.debug(f"Performing query with criteria: {criteria}.")
-        criteria = QueryCriteria(criteria).to_mongo()
-        result = list(self._table.find(criteria))
+        # Get the mongodb query
+        query = Query(document=document_filter, constraints=constraints).to_mongo()
+        self.logger.debug(f"Performing mongo query: {query}.")
+
+        result = list(self._table.find(query))
         self.logger.debug(f"Query returned {len(result)} results.")
 
         if key is not None:
@@ -114,131 +100,105 @@ class DataTable(HuntsmanBase):
 
         return result
 
-    def query_latest(self, days=0, hours=0, seconds=0, criteria=None, **kwargs):
-        """ Convenience function to query the latest files in the db.
-        Args:
-            days (int): default 0.
-            hours (int): default 0.
-            seconds (int): default 0.
-            criteria (dict, optional): Criteria for the query.
-        Returns:
-            list: Query result.
+    def find_one(self, *args, **kwargs):
+        """ Find a single matching document, making sure only one document is matched.
         """
-        date_now = current_date()
-        date_start = date_now - timedelta(days=days, hours=hours, seconds=seconds)
-        return self.query(date_start=date_start, criteria=criteria, **kwargs)
+        documents = self.find(*args, **kwargs)
+        if len(documents) > 1:
+            raise RuntimeError("Matched with more than one document.")
+        elif len(documents) == 0:
+            raise RuntimeError("No matching documents.")
+        return documents[0]
 
-    def get_metrics(self, *args, **kwargs):
-        """
-        """
-        documents = self.query_latest(*args, **kwargs)
-
-        # Convert to a DataFrame object
-        df = pd.DataFrame([d["metrics"] for d in documents])
-
-        # Replace empty strings with nan
-        df.replace("", np.nan, inplace=True)
-
-        # Add columns required to identify files
-        for key in self._unique_columns:
-            df[key] = [d[key] for d in documents]
-
-        return df
-
-    def insert(self, metadata, overwrite=False):
-        """ Insert a new document into the table.
+    def insert_one(self, document, overwrite=False):
+        """ Insert a new document into the table after ensuring it is valid and unique.
         Args:
             data_id (dict): The dictionary specifying the single document to delete.
-            overwrite (bool): If True, will overwrite the existing document for this dataId.
+            overwrite (bool, optional): If True, will overwrite the existing document if it exists.
+                Default: False.
         """
-        fn = partial(self._insert_one, overwrite=overwrite)
-        return _apply_operation(fn, metadata)
+        document = encode_mongo_query(document)
 
-    def update(self, metadata, upsert=False):
+        # Check the required columns exist in the new document
+        if self._required_columns is not None:
+            for column_name in self._required_columns:
+                if column_name not in document.keys():
+                    raise ValueError(f"New document missing required column: {column_name}.")
+
+        # Check there is at most one match in the table
+        count = self._table.count_documents(document)
+        if count == 1:
+            if overwrite:
+                self.delete(document)
+            else:
+                raise RuntimeError(f"Found existing document for {document} in {self}."
+                                   " Pass overwrite=True to overwrite.")
+        elif count != 0:
+            raise RuntimeError(f"Multiple matches found for document in {self}: {document}.")
+
+        # Insert the document
+        self.logger.debug(f"Inserting new document into {self}: {document}.")
+        self._table.insert_one(document)
+
+    def update_one(self, document_filter, to_update, upsert=False):
         """ Update a single document in the table.
         Args:
             data_id (dict): The data ID of the document to update.
             metadata (dict): The new metadata to be inserted.
             upsert (bool): If True, will create a new document if there is no matching entry.
         """
-        fn = partial(self._update_one, upsert=upsert)
-        return _apply_operation(fn, metadata)
+        document = encode_mongo_query(document_filter)
+        to_update = encode_mongo_query(to_update)
 
-    def delete(self, metadata):
+        count = self._table.count_documents(document)
+        if count > 1:
+            raise RuntimeError(f"Multiple matches found for document in {self}: {document}.")
+        elif (count == 0) and not upsert:
+            raise RuntimeError(f"No matches found for document in {self}. Use upsert=True to"
+                               " upsert.")
+        self._table.update_one(document, {'$set': to_update})
+
+    def delete_one(self, document_filter):
         """ Delete one document from the table.
         Args:
             data_id (dict): The dictionary specifying the single document to delete.
         """
-        return _apply_operation(self._delete_one, metadata)
+        document = encode_mongo_query(document_filter)
 
-    def _insert_one(self, metadata, overwrite):
-        """ Insert a new document into the table after ensuring it is valid and unique.
+        count = self._table.count_documents(document)
+        if count > 1:
+            raise RuntimeError(f"Multiple matches found for document in {self}: {document}.")
+        elif (count == 0):
+            raise RuntimeError(f"No matches found for document in {self}: {document}.")
+        self._table.delete_one(document)
+
+    def insert_many(self, documents, **kwargs):
+        """ Insert a new document into the table.
         Args:
             data_id (dict): The dictionary specifying the single document to delete.
             overwrite (bool): If True, will overwrite the existing document for this dataId.
         """
-        # Ensure required columns exist
-        if self._required_columns is not None:
-            for column_name in self._required_columns:
-                if column_name not in metadata.keys():
-                    raise ValueError(f"New document missing required column: {column_name}.")
+        return [self.insert_one(d, **kwargs) for d in documents]
 
-        # Check for matches in data table
-        unique_id = self._get_unique_id(metadata)
-        query_result = self.query(criteria=self._get_unique_id(metadata))
-        query_count = len(query_result)
-
-        if query_count == 1:
-            if overwrite:
-                self.delete(query_result)
-            else:
-                raise RuntimeError(f"Found existing document for {unique_id} in {self}."
-                                   " Pass overwrite=True to overwrite.")
-        elif query_count != 0:
-            raise ValueError(f"Multiple matches found for document in {self}: {unique_id}.")
-
-        # Insert the new document
-        self.logger.debug(f"Inserting new document into {self}: {metadata}.")
-        self._table.insert_one(metadata)
-
-    def _update_one(self, metadata, upsert):
-        """ Update a single document in the table. MongoDB edits the first matching
-        document, so we need to check we are only matching with a single document. A new document
-        will be created if there are no matches in the table.
-        Args:
-            data_id (dict): The data ID of the document to update.
-            metadata (dict): The new metadata to be inserted.
-            upsert (bool): If True, will create a new document if there is no matching entry.
-        """
-        data_id = self._get_unique_id(metadata)
-        query_count = len(self.query(criteria=data_id))
-        if query_count > 1:
-            raise RuntimeError(f"data ID matches with more than one document: {data_id}.")
-        elif query_count == 0:
-            if upsert:
-                new_metadata = data_id.copy().update(metadata.copy())
-                return self._insert_one(new_metadata)
-            else:
-                raise RuntimeError(f"No matching entry for {data_id} in {self}.")
-        else:
-            self._table.update_one(data_id, {'$set': metadata})
-
-    def _delete_one(self, data_id):
-        """ Delete one document from the table. MongoDB deletes the first matching document,
-        so we need to check we are only matching with a single document. A warining is logged if
-        no document is matched.
+    def delete_many(self, documents, **kwargs):
+        """ Delete one document from the table.
         Args:
             data_id (dict): The dictionary specifying the single document to delete.
         """
-        query_count = len(self.query(criteria=data_id))
-        if query_count > 1:
-            raise RuntimeError(f"Metadata matches with more than one document: {data_id}.")
-        elif query_count == 0:
-            self.logger.warning(f"Tried to delete non-existent document from {self}:"
-                                f" {data_id}.")
-        elif query_count == 1:
-            self.logger.debug(f"Deleting {data_id} from {self}.")
-            self._table.delete_one(data_id)
+        return [self.delete_one(d, **kwargs) for d in documents]
+
+    def find_latest(self, days=0, hours=0, seconds=0, **kwargs):
+        """ Convenience function to query the latest files in the db.
+        Args:
+            days (int): default 0.
+            hours (int): default 0.
+            seconds (int): default 0.
+        Returns:
+            list: Query result.
+        """
+        date_now = current_date()
+        date_start = date_now - timedelta(days=days, hours=hours, seconds=seconds)
+        return self.find(date_start=date_start, **kwargs)
 
     def _get_unique_id(self, metadata):
         """ Return the unique identifier for the metadata.
@@ -247,22 +207,70 @@ class DataTable(HuntsmanBase):
         Returns:
             dict: The unique document identifier.
         """
-        return encode_mongo_value({k: metadata[k] for k in self._unique_columns})
+        try:
+            return encode_mongo_query({k: metadata[k] for k in self._unique_columns})
+        # If there is a key missing, we will have to match with something in the table
+        except KeyError:
+            documents = self.query(metadata)
+            if len(documents) > 1:
+                raise RuntimeError(f"No unique ID for metadata: {metadata}.")
+            return encode_mongo_query({k: documents[0][k] for k in self._unique_columns})
 
 
 class ExposureTable(DataTable):
     """ Table to store metadata for Huntsman exposures. """
-    _table_key = "raw_data"
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, table_name="raw_data", **kwargs):
+        super().__init__(table_name=table_name, **kwargs)
         self._required_columns = self.config["fits_header"]["required_columns"]
+
+    def find_matching_raw_calibs(self, filename, days=None, **kwargs):
+        """ Get matching calibs for a given file.
+        """
+        # Get metadata for this file
+        document = self.find_one({"filename": filename})
+        date = document[self._date_key]
+
+        # Get date range for calibs
+        if days is None:
+            days = self.config["calibs"]["validity"]
+        date_start = date - timedelta(days=days)
+        date_end = date + timedelta(days=days)
+
+        calib_metadata = []
+        # Loop over raw calib dataTypes
+        for calib_type, matching_columns in self.config["calibs"]["matching_columns"].items():
+
+            # Matching raw calibs must satisfy these criteria
+            document_filter = {m: document[m] for m in matching_columns}
+            document_filter["dataType"] = calib_type
+
+            # TODO: Implement screening
+            documents = self.find(date_start=date_start, date_end=date_end,
+                                  document_filter=document_filter, **kwargs)
+            calib_metadata.extend(documents)
+
+        return calib_metadata
+
+    def get_metrics(self, *args, **kwargs):
+        """
+        """
+        documents = self.find_latest(*args, **kwargs)
+
+        # Convert to a DataFrame object
+        df = pd.DataFrame([d["metrics"] for d in documents])
+        df.replace("", np.nan, inplace=True)
+
+        # Add columns required to identify files
+        for key in self._unique_columns:
+            df[key] = [d[key] for d in documents]
+
+        return df
 
 
 class MasterCalibTable(DataTable):
     """ Table to store metadata for master calibs. """
-    _table_key = "master_calib"
     _required_columns = ("filename", "calibDate")  # TODO: Move to config
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, table_name="master_calib", **kwargs):
+        super().__init__(table_name=table_name, **kwargs)

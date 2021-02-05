@@ -12,17 +12,17 @@ def get_recent_calibs(interval_days, **kwargs):
     datatable = ExposureTable()
 
     # Get bias filenames
-    filenames_bias = datatable.query_latest(days=interval_days, dataType="bias",
+    filenames_bias = datatable.find_latest(days=interval_days, dataType="bias",
                                             column_name="filename", **kwargs)
     print(f"Found {len(filenames_bias)} bias fields.")
 
     # Get flat filenames
     """
-    filenames_flat = datatable.query_latest(days=interval_days, dataType="flat",
+    filenames_flat = datatable.find_latest(days=interval_days, dataType="flat",
                                             column_name="filename", **kwargs)
     """
     # This is a hack to cope with the non-standard field naming
-    metalist = datatable.query_latest(days=interval_days, **kwargs)
+    metalist = datatable.find_latest(days=interval_days, **kwargs)
     filenames_flat = []
     for m in metalist:
         if m["FIELD"].startswith("Flat") and not m["dataType"] == "bias":

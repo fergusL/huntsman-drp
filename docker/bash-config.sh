@@ -8,7 +8,3 @@ setup huntsman_drp v1
 setup display_firefly
 # Unfortunately we have to chown the mount point
 sudo chown -R ${USER} ${HUNTSMAN_MOUNT}
-# ---- Below this line are temporary requirements for astrometry.net ----
-alias python=python3
-# need this so panoptes-utils knows where to find solve-field executable
-export SOLVE_FIELD=$(which solve-field)

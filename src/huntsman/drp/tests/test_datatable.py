@@ -21,14 +21,14 @@ def test_mongodb_wrong_host_name(exposure_table, config):
 def test_datatable_query_by_date(exposure_table, fits_header_translator):
     """ """
     # Get list of all dates in the database
-    dates = [d["dateObs"] for d in exposure_table.query()]
+    dates = [d["dateObs"] for d in exposure_table.find()]
     n_files = len(dates)
 
     dates_unique = np.unique(dates)  # Sorted array of unique dates
     date_end = dates_unique[-1]
     for date_start in dates_unique[:-1]:
         # Get filenames between dates
-        filenames = exposure_table.query(key="filename", date_start=date_start, date_end=date_end)
+        filenames = exposure_table.find(key="filename", date_start=date_start, date_end=date_end)
         assert len(filenames) <= n_files  # This holds because we sorted the dates
         n_files = len(filenames)
         for filename in filenames:
@@ -49,16 +49,16 @@ def test_query_latest(exposure_table, config, tol=1):
         pytest.skip(f"Test does not work unless current date is later than all test exposures.")
     timediff = date_now - date_start
     # This should capture all the files
-    qresult = exposure_table.query_latest(days=timediff.days + tol)
-    assert len(qresult) == len(exposure_table.query())
+    qresult = exposure_table.find_latest(days=timediff.days + tol)
+    assert len(qresult) == len(exposure_table.find())
     # This should capture none of the files
-    qresult = exposure_table.query_latest(days=0, hours=0, seconds=0)
+    qresult = exposure_table.find_latest(days=0, hours=0, seconds=0)
     assert len(qresult) == 0
 
 
 def test_update(exposure_table):
     """Test that we can update a document specified by a filename."""
-    data = exposure_table.query()[0]
+    data = exposure_table.find()[0]
     # Get a filename to use as an identifier
     filename = data["filename"]
     # Get a key to update
@@ -68,9 +68,9 @@ def test_update(exposure_table):
     assert old_value != new_value  # Let's be sure...
     # Update the key with the new value
     update_dict = {key: new_value, "filename": filename}
-    exposure_table.update(update_dict)
+    exposure_table.update_one(data, update_dict)
     # Check the values match
-    data_updated = exposure_table.query()[0]
+    data_updated = exposure_table.find()[0]
     assert data_updated["_id"] == data["_id"]
     assert data_updated[key] == new_value
 
@@ -78,9 +78,9 @@ def test_update(exposure_table):
 def test_update_file_data_bad_filename(exposure_table):
     """Test that we can update a document specified by a filename."""
     # Specify the bad filename
-    filenames = exposure_table.query(key="filename")
+    filenames = exposure_table.find(key="filename")
     filename = "ThisFileDoesNotExist"
     assert filename not in filenames
     update_dict = {"A Key": "A Value", "filename": filename}
     with pytest.raises(RuntimeError):
-        exposure_table.update(update_dict, upsert=False)
+        exposure_table.update_one(update_dict, update_dict, upsert=False)

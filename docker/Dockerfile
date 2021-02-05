@@ -1,4 +1,4 @@
-ARG base_image=lsstsqre/centos:7-stack-lsst_distrib-v20_0_0
+ARG base_image=lsstsqre/centos:7-stack-lsst_distrib-v21_0_0
 FROM ${base_image}
 
 # Build args
@@ -31,10 +31,8 @@ RUN yum install -y wget vim sudo && \
   echo "https://:@s3.lsst.codes" >> ~/.git-credentials && \
   # Install extra python stuff into LSST conda env
   source ${LSST_HOME}/loadLSST.bash && \
-  pip install ipython pymongo astroquery panoptes-utils && \
-  # Downgrade coverage version to avoid pytest issues
-  pip uninstall -y coverage && \
-  pip install coverage==4.5.4
+  pip install ipython pymongo astroquery
+
 
 USER ${user}
 WORKDIR ${LSST_HOME}

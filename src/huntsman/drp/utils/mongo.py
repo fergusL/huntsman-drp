@@ -1,5 +1,6 @@
 from collections import abc
 import numpy as np
+from astropy import units as u
 
 # These are responsible for converting arbitary types into something mongo can store
 MONGO_ENCODINGS = {np.bool_: bool,
@@ -9,30 +10,32 @@ MONGO_ENCODINGS = {np.bool_: bool,
                    np.int64: int}
 
 # These are responsible for converting string keys into equivalent mongoDB operators
-MONGO_OPERATORS = {"equals": "$eq",
-                   "not_equals": "$ne",
+MONGO_OPERATORS = {"equal": "$eq",
+                   "not_equal": "$ne",
                    "greater_than": "$gt",
-                   "greater_than_equals": "$gte",
+                   "greater_than_equal": "$gte",
                    "less_than": "$lt",
-                   "less_than_equals": "$lte",
+                   "less_than_equal": "$lte",
                    "in": "$in",
                    "not_in": "$nin"}
 
 
-def encode_mongo_data(value):
-    """ Encode object for a pymongodb query.
+def encode_mongo_query(value):
+    """ Encode object for a pymongo query.
     Args:
         value (object): The data to encode.
     Returns:
         object: The encoded data.
     """
+    if isinstance(value, u.Quantity):
+        return encode_mongo_query(value.value)
     if isinstance(value, abc.Mapping):
         for k, v in value.items():
-            value[k] = encode_mongo_data(v)
+            value[k] = encode_mongo_query(v)
     elif isinstance(value, str):
         pass  # Required because strings are also iterables
     elif isinstance(value, abc.Iterable):
-        value = [encode_mongo_data(v) for v in value]
+        value = [encode_mongo_query(v) for v in value]
     else:
         for oldtype, newtype in MONGO_ENCODINGS.items():
             if isinstance(value, oldtype):
