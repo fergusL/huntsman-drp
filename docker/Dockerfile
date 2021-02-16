@@ -36,7 +36,6 @@ RUN yum install -y wget vim sudo && \
 
 USER ${user}
 WORKDIR ${LSST_HOME}
-ENV PATH="/usr/local/astrometry/bin:${PATH}"
 ADD bash-config.sh .
 RUN cat bash-config.sh >> ~/.bashrc
 CMD ["/bin/bash"]

@@ -11,6 +11,7 @@ cd ${COVERAGE_ROOT}
 pytest ${HUNTSMAN_DRP} -xv \
   --cov=huntsman.drp \
   --cov-config=${HUNTSMAN_DRP}/src/huntsman/drp/.coveragerc \
+  --cov-report html:${COVERAGE_ROOT}/coverage.html \
   --cov-report xml:${COVERAGE_ROOT}/coverage.xml \
   --session2file=${COVERAGE_ROOT}/pytest_session.txt
 

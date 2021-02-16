@@ -41,6 +41,7 @@ def make_hdu(data, date, cam_name, exposure_time, field, image_type, ccd_temp=0,
     hdu.header["CD2_2"] = pixel_size.to_value(u.degree / u.pixel)
     hdu.header["CD1_2"] = 0
     hdu.header["CD2_1"] = 0
+    hdu.header["BITDEPTH"] = 12
     return hdu
 
 

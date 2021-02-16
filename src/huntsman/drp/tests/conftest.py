@@ -109,3 +109,39 @@ def exposure_table_real_data(config, fits_header_translator):
     # Remove the metadata from the DB ready for other tests
     all_metadata = exposure_table.find()
     exposure_table.delete_many(all_metadata)
+
+
+@pytest.fixture(scope="function")
+def tempdir_and_exposure_table_with_uningested_files(
+        tmp_path_factory, config, fits_header_translator):
+    """
+    Create a temporary directory populated with fake FITS images, then parse the images into the
+    raw data table.
+    """
+    # Generate the fake data
+    tempdir = tmp_path_factory.mktemp("dir_with_uningested_files")
+    expseq = FakeExposureSequence(config=config)
+    expseq.generate_fake_data(directory=tempdir)
+
+    # Populate the database
+    exposure_table = ExposureTable(config=config, table_name="fake_data")
+    n_stop = len(expseq.header_dict) * 0.7 // 1  # ingest ~70% of the files
+    n = 0
+    for filename, header in expseq.header_dict.items():
+        if n >= n_stop:
+            break
+        n += 1
+        # Parse the header
+        parsed_header = fits_header_translator.parse_header(header)
+        parsed_header["filename"] = filename
+
+        # Insert the parsed header into the DB table
+        exposure_table.insert_one(parsed_header)
+
+    # Make sure table has the correct number of rows
+    assert exposure_table.count_documents() == n_stop
+    yield (tempdir, exposure_table)
+
+    # Remove the metadata from the DB ready for other tests
+    all_metadata = exposure_table.find()
+    exposure_table.delete_many(all_metadata)

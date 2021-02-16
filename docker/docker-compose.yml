@@ -45,6 +45,25 @@ services:
       - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
       - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
       - HUNTSMAN_MOUNT=${HUNTSMAN_MOUNT}
+  screening:
+      image: huntsmanarray/drp:develop
+      logging:
+        driver: "none"
+      build:
+        context: "${HUNTSMAN_DRP}/docker/screening"
+      network_mode: "host"
+      restart: on-failure
+      stdin_open: true
+      tty: true
+      volumes:    # screener image built on panoptes-plate-solver
+      - ${OBS_HUNTSMAN}:/home/obs_huntsman
+      - ${HUNTSMAN_DRP}:/home/huntsman-drp
+      - ${HUNTSMAN_MOUNT}:${HUNTSMAN_MOUNT}
+      - /data/nifi/huntsman_priv:/data/nifi/huntsman_priv
+      environment:
+        - OBS_HUNTSMAN=/home/obs_huntsman
+        - HUNTSMAN_DRP=/home/huntsman-drp
+        - HUNTSMAN_MOUNT=${HUNTSMAN_MOUNT}
 
   data-quality-monitor:
     image: huntsmanarray/drp-lsst:develop

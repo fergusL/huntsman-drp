@@ -1,6 +1,8 @@
 """
 Functions to calculate data quality metrics.
 """
+import os
+
 from astropy.io import fits
 
 from huntsman.drp.core import get_logger
@@ -9,13 +11,35 @@ METRICS = "clipped_stats", "flipped_asymmetry"  # TODO: Refactor!
 QUALITY_FLAG_NAME = "quality_success_flag"
 
 
-def screen_success(file_info):
+def screen_success(file_info, logger=None):
     """
     """
+    if logger is None:
+        logger = get_logger()
     try:
-        return bool(file_info["screen_success"])
+        return bool(file_info["quality"]["screen_success"])
+        logger.debug(
+            f'Screen success for file [{file_info["filename"]}] is: \
+                {bool(file_info["quality"]["screen_success"])}')
     except KeyError:
         return False
+
+
+def recursively_list_fits_files_in_directory(directory):
+    """Returns list of all files contained within a top level directory, including files
+    within subdirectories.
+
+    Args:
+        directory (str): Directory to examine.
+    """
+    # create a list of fits files within the directory of interest
+    files_in_directory = []
+    for dirpath, dirnames, filenames in os.walk(directory):
+        for file in filenames:
+            # append the filepath to fpaths if file is a fits or fits.fz file
+            if file.endswith('.fits') or file.endswith('.fits.fz'):
+                files_in_directory.append(os.path.join(dirpath, file))
+    return files_in_directory
 
 
 def metadata_from_fits(file_info, config=None, logger=None, dtype="float32"):
@@ -40,7 +64,6 @@ def metadata_from_fits(file_info, config=None, logger=None, dtype="float32"):
     except Exception as err:  # Data may be missing or corrupt, so catch all errors here
         logger.error(f"Unable to read file {filename}: {err}")
         result[QUALITY_FLAG_NAME] = False
-        return result
 
     # Calculate metrics
     for metric_name in METRICS:
@@ -50,5 +73,3 @@ def metadata_from_fits(file_info, config=None, logger=None, dtype="float32"):
         except Exception as err:
             logger.error(f"Problem getting '{metric_name}' metric for {filename}: {err}")
             result[QUALITY_FLAG_NAME] = False
-
-    return result
