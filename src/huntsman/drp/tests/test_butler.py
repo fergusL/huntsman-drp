@@ -44,6 +44,7 @@ def test_ingest(exposure_table, butler_repos, config):
             # Count the number of ingested files
             data_ids = butler.queryMetadata('raw', ['visit', 'ccd'])
             assert len(data_ids) == 0
+
             br.ingest_raw_data(filenames)
             data_ids = butler.queryMetadata('raw', ['visit', 'ccd'])
             assert len(data_ids) == len(filenames)
@@ -53,21 +54,30 @@ def test_ingest(exposure_table, butler_repos, config):
             data_ids = butler.queryMetadata('raw', ['visit', 'ccd'],
                                             dataId={"dataType": "flat"})
             assert len(data_ids) == n_flat
+
             n_sci = config["n_cameras"] * config["n_days"] * config["n_science"] * n_filters
             data_ids = butler.queryMetadata('raw', ['visit', 'ccd'],
                                             dataId={"dataType": "science"})
             assert len(data_ids) == n_sci
-            n_bias = config["n_cameras"] * config["n_days"] * config["n_bias"] * 2  # 2 exp times
+
+            n_bias = config["n_cameras"] * config["n_days"] * config["n_bias"]
             data_ids = butler.queryMetadata('raw', ['visit', 'ccd'],
                                             dataId={"dataType": "bias"})
             assert len(data_ids) == n_bias
+
+            n_dark = config["n_cameras"] * config["n_days"] * config["n_dark"] * 2  # 2 exp times
+            data_ids = butler.queryMetadata('raw', ['visit', 'ccd'],
+                                            dataId={"dataType": "dark"})
+            assert len(data_ids) == n_dark
 
 
 def test_make_master_calibs(exposure_table, temp_butler_repo, config):
     """ Make sure the correct number of master bias frames are produced."""
     test_config = config["exposure_sequence"]
     n_filters = len(test_config["filters"])
-    n_bias = test_config["n_cameras"] * 2  # 2 exp times
+
+    n_bias = test_config["n_cameras"]
+    n_dark = test_config["n_cameras"]
     n_flat = test_config["n_cameras"] * n_filters
 
     # Use the Butler repo to make the calibs
@@ -84,12 +94,17 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         # Check the biases in the butler dir
         metadata_bias = br.query_calib_metadata(datasetType="bias")
         assert len(metadata_bias) == n_bias
-        exptimes = set()
         ccds = set()
         for md in metadata_bias:
-            exptimes.update([md["expTime"]])
             ccds.update([md["ccd"]])
-        assert len(exptimes) == 2
+        assert len(ccds) == test_config["n_cameras"]
+
+        # Check the darks in the butler dir
+        metadata_dark = br.query_calib_metadata(datasetType="dark")
+        assert len(metadata_dark) == n_dark
+        ccds = set()
+        for md in metadata_dark:
+            ccds.update([md["ccd"]])
         assert len(ccds) == test_config["n_cameras"]
 
         # Check the flats in the butler dir
@@ -108,9 +123,10 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         calib_metadata = master_calib_table.find()
         filenames = [c["filename"] for c in calib_metadata]
         datasettypes = [c["datasetType"] for c in calib_metadata]
-        assert len(calib_metadata) == n_flat + n_bias
+        assert len(calib_metadata) == n_flat + n_bias + n_dark
         assert sum([c == "flat" for c in datasettypes]) == n_flat
         assert sum([c == "bias" for c in datasettypes]) == n_bias
+        assert sum([c == "dark" for c in datasettypes]) == n_dark
         for filename in filenames:
             assert os.path.isfile(filename)
 

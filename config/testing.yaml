@@ -6,7 +6,8 @@ exposure_sequence:
   n_cameras: 2
   n_days: 2   # Simulate this number of nights
   n_flat: 2   # Per (filter, camera) pair
-  n_bias: 2   # Per (exposure time, camera) pair
+  n_bias: 2   # Per camera
+  n_dark: 2   # Per (exposure time, camera) pair
   n_science: 1  # Per (camera, field, filter) combination
   exptime_flat: 30
   exptime_science: 60

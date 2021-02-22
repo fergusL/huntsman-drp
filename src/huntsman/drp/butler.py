@@ -151,21 +151,25 @@ class ButlerRepository(HuntsmanBase):
         self.logger.debug(f"Ingesting {len(filenames)} files.")
         tasks.ingest_raw_data(filenames, butler_directory=self.butler_directory, **kwargs)
 
-    def make_master_calibs(self, calib_date=None, rerun="default", skip_bias=False, **kwargs):
+    def make_master_calibs(self, calib_date=None, rerun="default", skip_bias=False,
+                           skip_dark=False, **kwargs):
         """ Make master calibs from ingested raw calib data.
         Args:
             calib_date (object, optional): The calib date to assign to the master calibs. If None
                 (default), will use the current date.
             rerun (str, optional): The name of the rerun. If None (default), use default rerun.
             skip_bias (bool, optional): Skip creation of master biases? Default False.
+            skip_dark (bool, optional): Skip creation of master darks? Default False.
         """
         if calib_date is None:
             calib_date = current_date_ymd()
         else:
             calib_date = date_to_ymd(calib_date)
 
-        for calib_type in ("bias", "flat"):
+        for calib_type in ("bias", "dark", "flat"):
             if skip_bias and calib_type == "bias":
+                continue
+            if skip_dark and calib_type == "dark":
                 continue
             self.logger.info(f"Creating master {calib_type} frames for calib_date={calib_date}.")
             self._make_master_calibs(calib_type, calib_date=calib_date, rerun=rerun, **kwargs)
@@ -214,8 +218,8 @@ class ButlerRepository(HuntsmanBase):
     def query_calib_metadata(self, datasetType, keys_ignore=None):
         """ Query the ingested calibs. TODO: Replace with the "official" Butler version.
         Args:
-            datasetType (str): Table name. Can either be "flat" or "bias".
-            keys_ognore (list of str, optional): If provided, drop these keys from result.
+            datasetType (str): The dataset type (e.g. bias, dark, flat).
+            keys_ignore (list of str, optional): If provided, drop these keys from result.
         Returns:
             list of dict: The query result in column: value.
         """

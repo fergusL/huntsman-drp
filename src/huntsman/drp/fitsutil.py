@@ -56,21 +56,25 @@ class FitsHeaderTranslatorBase(HuntsmanBase):
             setattr(self, funcname, partial(self._map_header_key, header_key=header_key))
 
     def translate_dataType(self, md):
-        """Translate FITS header into dataType: bias, flat or science."""
-        if md['IMAGETYP'] == 'Light Frame':
-            # The FIELD keyword is set by pocs.observation.field.field_name.
-            # For flat fields, this is "Flat Field"
-            if md["FIELD"].startswith("Flat"):
+        """ Translate raw FITS header into dataType: bias, dark, flat or science. """
+
+        image_type = md['IMAGETYP']
+        field_name = md["FIELD"]
+
+        if image_type == 'Light Frame':
+            if field_name.startswith("Flat"):
                 dataType = 'flat'
             else:
                 dataType = 'science'
-        # For Huntsman, we treat all dark frames as biases.
-        # The exposure times are used to match biases with science images.
-        elif md['IMAGETYP'] == 'Dark Frame':
-            dataType = 'bias'
+
+        elif image_type == 'Dark Frame':
+            if field_name == "Bias":
+                dataType = "bias"
+            else:
+                dataType = "dark"
         else:
-            raise NotImplementedError(f'IMAGETYP value not recongnised: '
-                                      f"{md['IMAGETYP']}")
+            raise NotImplementedError(f"IMAGETYP value not recongnised: {md['IMAGETYP']}")
+
         return dataType
 
     def translate_dateObs(self, md):
