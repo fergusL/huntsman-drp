@@ -70,6 +70,10 @@ class Screener(HuntsmanBase):
 
     @property
     def is_running(self):
+        """ Check if the screener is running.
+        Returns:
+            bool: True if running, else False.
+        """
         return self.status["is_running"]
 
     @property
@@ -160,10 +164,12 @@ class Screener(HuntsmanBase):
             time.sleep(self._sleep_interval)
 
     def _async_ingest_files(self, sleep=10):
-        """ screen files that have been in the queue longer than self.delay_interval.
+        """ Ingest files in the ingest queue into the datatable.
         Args:
             sleep (float, optional): Sleep for this long while waiting for self.delay_interval to
                 expire. Default: 10s.
+
+        #TODO: refactor _async_ingest_files and _async_screen_files into single generic method
         """
         while True:
             if self._stop and self._ingest_queue.empty():
@@ -174,6 +180,8 @@ class Screener(HuntsmanBase):
                 track_time, filename = self._ingest_queue.get(
                     block=True, timeout=sleep)
             except queue.Empty:
+                self.logger.info(f"No new files to process. Sleeping for {self._sleep}s.")
+                time.sleep(sleep)
                 continue
             try:
                 self._ingest_file(filename)
@@ -201,6 +209,8 @@ class Screener(HuntsmanBase):
                 track_time, filename = self._screen_queue.get(
                     block=True, timeout=sleep)
             except queue.Empty:
+                self.logger.info(f"No new files to process. Sleeping for {self._sleep}s.")
+                time.sleep(sleep)
                 continue
             try:
                 self._screen_file(filename)
@@ -216,10 +226,18 @@ class Screener(HuntsmanBase):
     def _get_filenames_to_ingest(self, monitored_directory='/data/nifi/huntsman_priv/images'):
         """ Watch top level directory for new files to process/ingest into database.
 
-        TODO: monitored_directory should be loaded from a config or somthing
+        Parameters
+        ----------
+        monitored_directory : str, optional
+            Top level directory to watch for files (including files in subdirectories),
+            by default '/data/nifi/huntsman_priv/images'.
 
-        Returns:
-            list: The list of filenames to process.
+        Returns
+        -------
+        list:
+            The list of filenames to process.
+
+        #TODO: monitored_directory should be loaded from a config or somthing
         """
         # create a list of fits files within the directory of interest
         files_in_directory = recursively_list_fits_files_in_directory(self._monitored_directory)
@@ -231,9 +249,12 @@ class Screener(HuntsmanBase):
         return files_to_ingest
 
     def _get_filenames_to_screen(self):
-        """ Get valid filenames in the data table to screen.
-        Returns:
-            list: The list of filenames to screen.
+        """Get valid filenames in the data table to screen
+
+        Returns
+        -------
+        list
+            The list of filenames to screen.
         """
         files_to_screen = []
         # Find any entries in database that haven't been screened
@@ -250,7 +271,12 @@ class Screener(HuntsmanBase):
         return files_to_screen
 
     def _ingest_file(self, filename):
-        """Private method that calls the various screening metrics and collates the results
+        """Private method that calls the various screening metrics and collates the results.
+
+        Parameters
+        ----------
+        filename : str
+            Filename of image to be ingested.
         """
         # Parse the header before adding to table
         hdr = read_fits_header(filename)
@@ -261,7 +287,12 @@ class Screener(HuntsmanBase):
         self._table.insert_one(parsed_header)
 
     def _screen_file(self, filename):
-        """Private method that calls the various screening metrics and collates the results
+        """Private method that calls the various screening metrics and collates the results.
+
+        Parameters
+        ----------
+        filename : str
+            Filename of image to be screened.
         """
         metrics = self._get_raw_metrics(filename)
 
@@ -274,13 +305,17 @@ class Screener(HuntsmanBase):
         self._table.update_one(metadata, to_update=to_update)
 
     def _get_raw_metrics(self, filename):
-        """Evaluate metrics for a raw/unprocessed file.
+        """ Evaluate metrics for a raw/unprocessed file.
 
-        Args:
-            filename: filename of image to be characterised.
+        Parameters
+        ----------
+        filename : str
+            filename of image to be measured.
 
-        Returns:
-            dict: Dictionary containing the metric values.
+        Returns
+        -------
+        dict
+            Dictionary containing the metric values.
         """
         result = {}
         # read the header

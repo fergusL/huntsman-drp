@@ -57,7 +57,18 @@ class DataTable(HuntsmanBase):
         self._table = self._db[table_name]
 
     def count_documents(self, document_filter=None):
-        """
+        """ Count the number of documents (matching document_filter criteria) in table.
+
+        Parameters
+        ----------
+        document_filter : dict, optional
+            A dictionary containing key, value pairs to be matched against other documents,
+            by default None
+
+        Returns
+        -------
+        int
+            The number of matching documents in the table.
         """
         if document_filter is None:
             document_filter = {}
@@ -65,14 +76,29 @@ class DataTable(HuntsmanBase):
 
     def find(self, document_filter=None, constraints=None, date_start=None, date_end=None,
              date=None, key=None):
-        """ Get data for one or more matches in the table.
-        Args:
-            criteria (dict, optional): The query criteria.
-            date_start (object, optional): The start of the queried date range.
-            date_end (object, optional):  The end of the queried date range.
-            date (object, optional): The exact date to query on.
-        Returns:
-            pd.DataFrame: The query result.
+        """Get data for one or more matches in the table.
+
+        Parameters
+        ----------
+        document_filter : dict, optional
+            A dictionary containing key, value pairs to be matched against other documents,
+            by default None
+        constraints : dict, optional
+            A dictionary containing other search criteria which can include the mongo operators
+            defined in the `huntsman.drp.utils.mongo.MONGO_OPERATORS`, by default None.
+        date_start : object, optional
+            Constrain query to a timeframe starting at date_start, by default None.
+        date_end : object, optional
+            Constrain query to a timeframe ending at date_end, by default None.
+        date : object, optional
+            Constrain query to specific date, by default None.
+        key : str, optional
+            Specify a specific key to be returned from the query (e.g. filename), by default None.
+
+        Returns
+        -------
+        result: list or np.array
+            Result of the query. If key is specified result will be a np.array(?)
         """
         if constraints is None:
             constraints = {}
@@ -111,11 +137,15 @@ class DataTable(HuntsmanBase):
         return documents[0]
 
     def insert_one(self, document, overwrite=False):
-        """ Insert a new document into the table after ensuring it is valid and unique.
-        Args:
-            data_id (dict): The dictionary specifying the single document to delete.
-            overwrite (bool, optional): If True, will overwrite the existing document if it exists.
-                Default: False.
+        """Insert a new document into the table after ensuring it is valid and unique.
+
+        Parameters
+        ----------
+        document : dict
+            The document to be inserted into the table.
+        overwrite : bool, optional
+            If True override any existing document, by default False.
+
         """
         document = encode_mongo_query(document)
 
@@ -142,10 +172,19 @@ class DataTable(HuntsmanBase):
 
     def update_one(self, document_filter, to_update, upsert=False):
         """ Update a single document in the table.
-        Args:
-            data_id (dict): The data ID of the document to update.
-            metadata (dict): The new metadata to be inserted.
-            upsert (bool): If True, will create a new document if there is no matching entry.
+
+        Parameters
+        ----------
+        document_filter : dict, optional
+            A dictionary containing key, value pairs used to identify the document to update,
+            by default None
+        to_update : dict
+            The key, value pairs to update within the matched document.
+        upsert : bool, optional
+            If True perform the insert even if no matching documents are found,
+            by default False
+
+        https://docs.mongodb.com/manual/reference/operator/update/set/#up._S_set
         """
         document = encode_mongo_query(document_filter)
         to_update = encode_mongo_query(to_update)
@@ -156,12 +195,16 @@ class DataTable(HuntsmanBase):
         elif (count == 0) and not upsert:
             raise RuntimeError(f"No matches found for document in {self}. Use upsert=True to"
                                " upsert.")
-        self._table.update_one(document, {'$set': to_update})
+        self._table.update_one(document, {'$set': to_update}, upsert=upsert)
 
     def delete_one(self, document_filter):
-        """ Delete one document from the table.
-        Args:
-            data_id (dict): The dictionary specifying the single document to delete.
+        """Delete one document from the table.
+
+        Parameters
+        ----------
+        document_filter : dict, optional
+            A dictionary containing key, value pairs used to identify the document to delete,
+            by default None
         """
         document = encode_mongo_query(document_filter)
 
@@ -173,17 +216,23 @@ class DataTable(HuntsmanBase):
         self._table.delete_one(document)
 
     def insert_many(self, documents, **kwargs):
-        """ Insert a new document into the table.
-        Args:
-            data_id (dict): The dictionary specifying the single document to delete.
-            overwrite (bool): If True, will overwrite the existing document for this dataId.
+        """Insert a new document into the table.
+
+        Parameters
+        ----------
+        documents : list
+            List of documents to be inserted into the table.
         """
         return [self.insert_one(d, **kwargs) for d in documents]
 
     def delete_many(self, documents, **kwargs):
         """ Delete one document from the table.
-        Args:
-            data_id (dict): The dictionary specifying the single document to delete.
+
+        Parameters
+        ----------
+        documents : list
+            List of dictionaries that specify documents to be deleted from the table.
+
         """
         return [self.delete_one(d, **kwargs) for d in documents]
 

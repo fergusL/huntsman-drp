@@ -4,7 +4,20 @@ METRICS = ("clipped_stats", "flipped_asymmetry")
 
 
 def clipped_stats(data, file_info, **kwargs):
-    """ Return sigma-clipped image statistics. """
+    """Return sigma-clipped image statistics.
+
+    Parameters
+    ----------
+    data : array
+        Image data as stored as an array.
+    file_info : dict
+        Dictionary containing image metadata
+
+    Returns
+    -------
+    dict
+        Dictionary containing the calculated stats values.
+    """
     mean, median, stdev = stats.sigma_clipped_stats(data)
 
     # Calculate the well fullness fraction using clipped median
@@ -17,8 +30,19 @@ def clipped_stats(data, file_info, **kwargs):
 
 
 def flipped_asymmetry(data, file_info, **kwargs):
-    """
-    Calculate the asymmetry statistics by flipping data in x and y directions.
+    """Calculate the asymmetry statistics by flipping data in x and y directions.
+
+    Parameters
+    ----------
+    data : array
+        Image data as stored as an array.
+    file_info : dict
+        Dictionary containing image metadata
+
+    Returns
+    -------
+    dict
+        Dictionary containing the calculated stats values.
     """
     # Horizontal flip
     data_flip = data[:, ::-1]

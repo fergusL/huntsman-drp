@@ -8,9 +8,11 @@ from lsst.daf.persistence import FsScanner
 def get_filename_template(datasetType, policy):
     """ Get the filename template for a specific datatype.
     Args:
-        datasetType (str): The dataset type as specified in the policy file. e.g. `exposures.raw`
+        datasetType (str):
+            The dataset type as specified in the policy file. e.g. `exposures.raw`
             or `calibrations.flat`.
-        policy (`lsst.daf.persistence.Policy`): The Policy object.
+        policy (`lsst.daf.persistence.Policy`):
+            The Policy object.
     Returns:
         str: The filename template.
     """
@@ -22,8 +24,7 @@ def get_filename_template(datasetType, policy):
 
 
 def get_files_of_type(datasetType, directory, policy):
-    """
-    Get the filenames of a specific dataset type under a particular directory that match
+    """ Get the filenames of a specific dataset type under a particular directory that match
     the appropriate filename template.
     Args:
         datasetType (str): The dataset type as specified in the policy file. e.g. `exposures.raw`
@@ -126,6 +127,7 @@ def data_id_to_calib_id(datasetType, data_ids, butler, keys_ignore=None):
     Args:
         datasetType (str): The dataset type, e.g. bias or flat.
         data_ids (list of dict): The dataIds to convert to calibIds.
+        butler (lsst.daf.persistence.butler.Butler): The butler object.
         keys_ignore (list of str, optional): If given, the returned calibIds will not contain
             any of the keys listed in keys_ignore.
     Returns:
