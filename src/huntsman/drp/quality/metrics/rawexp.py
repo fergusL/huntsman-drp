@@ -22,7 +22,7 @@ def get_wcs(filename, timeout=60, downsample=4, radius=5, *args):
     has_wcs = False
 
     # Create list of args to pass to solve_field
-    solve_kwargs = {'--cpulimit': str(timeout),
+    solve_kwargs = {'--cpulimit': timeout,
                     '--downsample': downsample}
 
     # try and get the Mount RA/DEC info to speed up the solve
