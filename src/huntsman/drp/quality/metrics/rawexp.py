@@ -50,6 +50,7 @@ def get_wcs(filename, *args, timeout=60, downsample=4, radius=5):
         return {"has_wcs": has_wcs}
 
     # finally check if the header now contians a wcs solution
+    solve_info.pop('solved_fits_file', None)
     wcs = WCS(solve_info)
     return {"has_wcs": wcs.has_celestial}
 
