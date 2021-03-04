@@ -21,7 +21,7 @@ class Screener(HuntsmanBase):
     """ Class to watch for new file entries in database and process their metadata
     """
 
-    def __init__(self, exposure_table=None, sleep_interval=None, status_interval=60,
+    def __init__(self, exposure_table=None, sleep_interval=1, status_interval=10,
                  monitored_directory='/data/nifi/huntsman_priv/images', *args, **kwargs):
         """
         Args:
