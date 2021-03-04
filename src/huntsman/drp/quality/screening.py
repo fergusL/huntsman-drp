@@ -35,7 +35,7 @@ class Screener(HuntsmanBase):
         """
         super().__init__(*args, **kwargs)
 
-        # work around so that tests can run without running the has_wcs metric
+        # work around so that tests can run without running the get_wcs metric
         self._raw_metrics = deepcopy(RAW_METRICS)
 
         if exposure_table is None:
