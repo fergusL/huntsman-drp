@@ -13,7 +13,7 @@ ENV SCREENER_HOME /home
 USER root
 # update apt-get
 RUN apt-get update -y && \
-    apt-get install -y wget ca-certificates git && \
+    apt-get install -y wget ca-certificates git libcfitsio-bin && \
     # install pip
     apt-get install -y python3-pip && \
     wget \
