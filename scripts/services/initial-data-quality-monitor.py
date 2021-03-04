@@ -6,5 +6,5 @@ from huntsman.drp.quality.screening import Screener
 
 if __name__ == "__main__":
 
-    screener = Screener()
+    screener = Screener(sleep_interval=300)
     screener.start()
