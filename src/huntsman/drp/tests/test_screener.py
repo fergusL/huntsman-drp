@@ -37,8 +37,9 @@ def test_screener_ingest(tempdir_and_exposure_table_with_uningested_files, confi
             raise RuntimeError("Screener has stopped running.")
         for md in exposure_table.find():
             assert "rawexp" in md["quality"].keys()
-        for metric_value in md["quality"]["rawexp"].values():
-            assert metric_value is not None
+            for key in md["quality"]["rawexp"].keys():
+                if key != "get_wcs":
+                    assert md["quality"]["rawexp"][key] is not None
     finally:
         screener.stop()
         assert not screener.is_running
