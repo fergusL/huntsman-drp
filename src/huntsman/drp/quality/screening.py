@@ -167,11 +167,8 @@ class Screener(HuntsmanBase):
             # Sleep before checking again
             time.sleep(self._sleep_interval)
 
-    def _async_ingest_files(self, sleep=10):
+    def _async_ingest_files(self, timeout=10):
         """ Ingest files in the ingest queue into the datatable.
-        Args:
-            sleep (float, optional): Sleep for this long while waiting for self.delay_interval to
-                expire. Default: 10s.
 
         #TODO: refactor _async_ingest_files and _async_screen_files into single generic method
         """
@@ -182,10 +179,10 @@ class Screener(HuntsmanBase):
             # Get the oldest file from the queue
             try:
                 track_time, filename = self._ingest_queue.get(
-                    block=True, timeout=sleep)
+                    block=True, timeout=timeout)
             except queue.Empty:
                 self.logger.info(f"No new files to process. Sleeping for {self._sleep_interval}s.")
-                time.sleep(sleep)
+                time.sleep(self._sleep_interval)
                 continue
             try:
                 self._ingest_file(filename)
@@ -198,11 +195,9 @@ class Screener(HuntsmanBase):
             # Tell the queue we are done with this file
             self._ingest_queue.task_done()
 
-    def _async_screen_files(self, sleep=10):
+    def _async_screen_files(self, timeout=10):
         """ screen files that have been in the queue longer than self.delay_interval.
-        Args:
-            sleep (float, optional): Sleep for this long while waiting for self.delay_interval to
-                expire. Default: 10s.
+
         """
         while True:
             if self._stop and self._screen_queue.empty():
@@ -211,10 +206,10 @@ class Screener(HuntsmanBase):
             # Get the oldest file from the queue
             try:
                 track_time, filename = self._screen_queue.get(
-                    block=True, timeout=sleep)
+                    block=True, timeout=timeout)
             except queue.Empty:
                 self.logger.info(f"No new files to process. Sleeping for {self._sleep_interval}s.")
-                time.sleep(sleep)
+                time.sleep(self._sleep_interval)
                 continue
             try:
                 self._screen_file(filename)
