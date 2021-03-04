@@ -6,7 +6,7 @@ from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header
 RAW_METRICS = ("get_wcs", "clipped_stats", "flipped_asymmetry")
 
 
-def get_wcs(filename, timeout=60, downsample=4, radius=5, *args):
+def get_wcs(filename, *args, timeout=60, downsample=4, radius=5):
     """Function to call get_solve_field on a file and verify
     if a WCS solution could be found.
 
