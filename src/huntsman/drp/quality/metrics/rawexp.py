@@ -45,7 +45,7 @@ def get_wcs(filename, timeout=60, downsample=4, radius=5, *args):
 
     # now solve for wcs
     try:
-        solve_info = get_solve_field(filename, *args, timeout=timeout, **solve_kwargs)
+        solve_info = get_solve_field(filename, timeout=timeout, **solve_kwargs)
     except Exception:
         return {"has_wcs": has_wcs}
 
