@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 volumes:
   obs_huntsman:
@@ -47,8 +47,6 @@ services:
       - HUNTSMAN_MOUNT=${HUNTSMAN_MOUNT}
   screening:
     image: huntsmanarray/drp:develop
-    logging:
-      driver: "none"
     build:
       context: "${HUNTSMAN_DRP}/docker/screening"
     network_mode: "host"
@@ -56,15 +54,15 @@ services:
     stdin_open: true
     tty: true
     volumes: # screener image built on panoptes-plate-solver
-      - obs_huntsman:/opt/lsst/software/stack/obs_huntsman
-      - huntsman_drp:/opt/lsst/software/stack/huntsman-drp
+      - obs_huntsman:/home/obs_huntsman
+      - huntsman_drp:/home/huntsman-drp
       - huntsman_mount:${HUNTSMAN_MOUNT}
       - huntsman_datadir:/data/nifi/huntsman_priv
     environment:
       - OBS_HUNTSMAN=/home/obs_huntsman
       - HUNTSMAN_DRP=/home/huntsman-drp
       - HUNTSMAN_MOUNT=${HUNTSMAN_MOUNT}
-    command: python /opt/lsst/software/stack/huntsman-drp/scripts/quality/initial-data-quality-monitor.py
+    command: python /home/huntsman-drp/scripts/quality/initial-data-quality-monitor.py
 
   data-quality-monitor:
     image: huntsmanarray/drp-lsst:develop
