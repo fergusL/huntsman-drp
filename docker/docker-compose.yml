@@ -62,7 +62,7 @@ services:
       - OBS_HUNTSMAN=/home/obs_huntsman
       - HUNTSMAN_DRP=/home/huntsman-drp
       - HUNTSMAN_MOUNT=${HUNTSMAN_MOUNT}
-    command: python /home/huntsman-drp/scripts/services/initial-data-quality-monitor.py
+    command: /root/miniconda3/envs/screener/bin/python /home/huntsman-drp/scripts/services/initial-data-quality-monitor.py
 
   data-quality-monitor:
     image: huntsmanarray/drp-lsst:develop
