@@ -40,7 +40,8 @@ class Screener(HuntsmanBase):
 
         if exposure_table is None:
             self._table = ExposureTable(config=self.config, logger=self.logger)
-        self._table = exposure_table
+        else:
+            self._table = exposure_table
 
         self._sleep_interval = sleep_interval
         if self._sleep_interval is None:
