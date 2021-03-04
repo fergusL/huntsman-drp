@@ -6,4 +6,8 @@ setup(name='huntsman-drp',
       packages=packages,
       package_dir={'': 'src'},
       zip_safe=False,
-      )
+      install_requires=['astropy',
+                        'matplotlib',
+                        'pyyaml',
+                        'pandas'
+                        ])

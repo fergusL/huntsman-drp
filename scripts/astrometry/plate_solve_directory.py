@@ -1,4 +1,6 @@
-"""Script to plate solve all fits/fits.fz files in a given directory, add wcs infomation to the headers.
+"""
+Script to plate solve all fits/fits.fz files in a given directory,
+add wcs infomation to the headers.
 """
 import os
 import argparse

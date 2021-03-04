@@ -1,9 +1,60 @@
 from astropy import stats
+from astropy.wcs import WCS
+from panoptes.utils.images.fits import get_solve_field
+from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header
 
-METRICS = ("clipped_stats", "flipped_asymmetry")
+RAW_METRICS = ("has_wcs", "clipped_stats", "flipped_asymmetry")
 
 
-def clipped_stats(data, file_info, **kwargs):
+def get_wcs(filename, timeout=60, downsample=4, radius=5, *args):
+    """Function to call get_solve_field on a file and verify
+    if a WCS solution could be found.
+
+    Args:
+        filename (str): The filename.
+        timeout (int, optional): How long to try and solve in seconds. Defaults to 60.
+        downsample (int, optional): Downsample image by this factor. Defaults to 4.
+        radius (int, optional): Search radius around mount Ra and Dec coords. Defaults to 5.
+
+    Returns:
+        dict: dictionary containing metadata.
+    """
+    has_wcs = False
+
+    # Create list of args to pass to solve_field
+    solve_kwargs = {'--cpulimit': str(timeout),
+                    '--downsample': downsample}
+
+    # try and get the Mount RA/DEC info to speed up the solve
+    try:
+        hdr = read_fits_header(filename)
+        parsed_hdr = FitsHeaderTranslator().parse_header(hdr)
+        ra = hdr.get('RA-MNT')
+        dec = hdr.get('DEC-MNT')
+    except KeyError:
+        pass
+
+    if 'ra' and 'dec' in vars():
+        solve_kwargs['--ra'] = ra
+        solve_kwargs['--dec'] = dec
+        solve_kwargs['--radius'] = radius
+
+    # if file is not a science exposure, skip
+    if parsed_hdr['dataType'] != "science":
+        return {"has_wcs": has_wcs}
+
+    # now solve for wcs
+    try:
+        get_solve_field(filename, *args, **solve_kwargs)
+    except Exception:
+        pass
+
+    # finally check if the header now contians a wcs solution
+    wcs = WCS(read_fits_header(filename))
+    return {"has_wcs": wcs.has_celestial}
+
+
+def clipped_stats(filename, data, file_info):
     """Return sigma-clipped image statistics.
 
     Parameters
@@ -29,7 +80,7 @@ def clipped_stats(data, file_info, **kwargs):
             "well_fullfrac": well_fullfrac}
 
 
-def flipped_asymmetry(data, file_info, **kwargs):
+def flipped_asymmetry(filename, data, file_info):
     """Calculate the asymmetry statistics by flipping data in x and y directions.
 
     Parameters
@@ -46,8 +97,8 @@ def flipped_asymmetry(data, file_info, **kwargs):
     """
     # Horizontal flip
     data_flip = data[:, ::-1]
-    std_horizontal = (data-data_flip).std()
+    std_horizontal = (data - data_flip).std()
     # Vertical flip
     data_flip = data[::-1, :]
-    std_vertical = (data-data_flip).std()
+    std_vertical = (data - data_flip).std()
     return {"flip_asymm_h": std_horizontal, "flip_asymm_v": std_vertical}
