@@ -45,12 +45,12 @@ def get_wcs(filename, timeout=60, downsample=4, radius=5, *args):
 
     # now solve for wcs
     try:
-        get_solve_field(filename, *args, timeout=timeout, **solve_kwargs)
+        solve_info = get_solve_field(filename, *args, timeout=timeout, **solve_kwargs)
     except Exception:
         pass
 
     # finally check if the header now contians a wcs solution
-    wcs = WCS(read_fits_header(filename))
+    wcs = WCS(solve_info)
     return {"has_wcs": wcs.has_celestial}
 
 
