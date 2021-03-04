@@ -62,7 +62,7 @@ services:
       - OBS_HUNTSMAN=/home/obs_huntsman
       - HUNTSMAN_DRP=/home/huntsman-drp
       - HUNTSMAN_MOUNT=${HUNTSMAN_MOUNT}
-    command: python /home/huntsman-drp/scripts/quality/initial-data-quality-monitor.py
+    command: python /home/huntsman-drp/scripts/services/initial-data-quality-monitor.py
 
   data-quality-monitor:
     image: huntsmanarray/drp-lsst:develop
@@ -78,4 +78,4 @@ services:
       - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
       - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
       - HUNTSMAN_MOUNT=${HUNTSMAN_MOUNT}
-    command: python /opt/lsst/software/stack/huntsman-drp/scripts/quality/calexp-quality-monitor.py
+    command: python /opt/lsst/software/stack/huntsman-drp/scripts/services/calexp-quality-monitor.py
