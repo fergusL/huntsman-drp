@@ -12,7 +12,7 @@ function cleanup {
 
 mkdir -p ${HUNTSMAN_DRP_COVDIR} && chmod -R 777 ${HUNTSMAN_DRP_COVDIR}
 
-echo "Building new docker image for testing..."
+echo "Building new docker image(s) for testing..."
 docker-compose -f ${COMPOSE_FILE} build python-tests
 
 echo "Running python tests inside docker container..."

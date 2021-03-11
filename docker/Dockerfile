@@ -34,13 +34,15 @@ RUN yum install -y wget vim sudo && \
   pip install ipython pymongo astroquery panoptes-utils && \
   # Copy obs_huntsman into the image (install handled by EUPS)
   cd "${LSST_HOME}" && \
-  git clone https://github.com/AstroHuntsman/obs_huntsman.git
+  git clone https://github.com/AstroHuntsman/obs_huntsman.git && \
+  # Make directory for huntsman-drp repository
+  mkdir "${LSST_HOME}"/huntsman-drp
 
 # Copy huntsman-drp into the image (install handled by EUPS)
-COPY --chown="${USER}:${USER}" . .
+COPY --chown="${USER}:${USER}" . "${LSST_HOME}"/huntsman-drp
 
 USER ${user}
 WORKDIR ${LSST_HOME}
-ADD bash-config.sh .
+ADD docker/bash-config.sh .
 RUN cat bash-config.sh >> ~/.bashrc
 CMD ["/bin/bash"]

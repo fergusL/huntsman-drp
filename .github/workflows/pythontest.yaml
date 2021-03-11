@@ -1,6 +1,6 @@
 name: Python Tests
-
 on: [push, pull_request]
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -8,13 +8,16 @@ jobs:
       matrix:
         python-version: [3.8]
     steps:
-      - name: Checkout code
+      -
+        name: Checkout code
         uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
+      -
+        name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v1
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Lint with flake8
+      -
+        name: Lint with flake8
         run: |
           pip install flake8
           # stop the build if there are Python syntax errors or undefined names
@@ -32,24 +35,26 @@ jobs:
       matrix:
         python-version: [3.8]
     steps:
-      - name: Make coverage directory
+      -
+        name: Make coverage directory
         run: mkdir ${{ env.HUNTSMAN_DRP_COVDIR }} && chmod -R 777 ${{ env.HUNTSMAN_DRP_COVDIR }}
-      - name: Checkout huntsman-drp
+      -
+        name: Checkout huntsman-drp
         uses: actions/checkout@v2
         with:
           path: huntsman-drp
-      - name: Checkout obs_huntsman
+      -
+        name: Checkout obs_huntsman
         uses: actions/checkout@v2
         with:
           repository: AstroHuntsman/obs_huntsman
           path: obs_huntsman
-      - name: Build docker image
-        working-directory: ${{ env.HUNTSMAN_DRP }}/docker/testing
-        run: docker-compose build
-      - name: Test with pytest in huntsman-drp container
+      -
+        name: Test with pytest in huntsman-drp container
         working-directory: ${{ env.HUNTSMAN_DRP }}
         run: scripts/testing/run-local-tests.sh
-      - name: Upload coverage report to codecov.io
+      -
+        name: Upload coverage report to codecov.io
         uses: codecov/codecov-action@v1
         if: success()
         with:

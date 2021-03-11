@@ -12,10 +12,11 @@ services:
 
   python-tests:
     image: huntsmanarray/drp-lsst:develop
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
     depends_on:
       - mongo
-    build:
-      context: ..
     network_mode: "host"
     stdin_open: true
     tty: true

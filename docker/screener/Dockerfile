@@ -1,14 +1,7 @@
 ARG base_image=gcr.io/panoptes-exp/panoptes-plate-solver
 FROM ${base_image}
+
 ENV PATH="/root/miniconda3/bin:${PATH}"
-ARG PATH="/root/miniconda3/bin:${PATH}"
-
-# Environment variables
-ENV DEBIAN_FRONTEND=noninteractive
-ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
-ENV SHELL /bin/bash
-ENV SCREENER_HOME /home
-
 
 USER root
 # update apt-get
@@ -30,9 +23,9 @@ RUN apt-get update -y && \
     pip uninstall -y coverage && \
     pip install coverage==4.5.4 && \
     cd /home/ && git clone https://github.com/AstroHuntsman/huntsman-drp.git && \
-    cd /home/huntsman-drp/ && python setup.py develop && \
+    cd /home/huntsman-drp && python setup.py develop
 
 WORKDIR /home
-ADD bash-config.sh .
+ADD docker/screener/bash-config.sh .
 RUN cat bash-config.sh >> ~/.bashrc
 CMD ["/bin/bash"]
