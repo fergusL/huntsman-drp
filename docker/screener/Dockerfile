@@ -31,8 +31,6 @@ RUN apt-get update -y && \
     pip install coverage==4.5.4 && \
     cd /home/ && git clone https://github.com/AstroHuntsman/huntsman-drp.git && \
     cd /home/huntsman-drp/ && python setup.py develop && \
-    conda deactivate
-
 
 WORKDIR /home
 ADD bash-config.sh .
