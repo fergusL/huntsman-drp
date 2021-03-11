@@ -5,20 +5,23 @@ on:
     - develop
     paths:
     - docker/Dockerfile
-    - docker/screening/Dockerfile
+    - docker/screener/Dockerfile
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
-    - name: Publish HuntsmanDRP image to DockerHub
+    -
+      uses: actions/checkout@master
+    -
+      name: Build and push huntsmanarray/drp-lsst:develop image
       uses: elgohr/Publish-Docker-Github-Action@master
       with:
         name: huntsmanarray/drp-lsst:develop
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
         workdir: docker
-    - name: Publish screener to DockerHub
+    -
+      name: Build and push huntsmanarray/drp:develop image
       uses: elgohr/Publish-Docker-Github-Action@master
       with:
         name: huntsmanarray/drp:develop
