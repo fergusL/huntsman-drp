@@ -80,7 +80,7 @@ def get_logger(backupCount=5, maxBytes=256000000):
         try:
             logdir = os.path.join(os.environ["HUNTSMAN_DRP"], "logs")
         except KeyError:
-            raise KeyError("Neither HUNTSMAN_DRP_LOGS or HUNTSMAN_DRP environment variables set."
+            raise KeyError("Neither HUNTSMAN_LOG_DIR or HUNTSMAN_DRP environment variables set."
                            " Unable to determine log directory.")
 
     # Make sure log directory exists
