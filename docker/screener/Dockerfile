@@ -7,9 +7,8 @@ ENV HUNTSMAN_LOG_DIR=/home/huntsman-logs
 USER root
 # update apt-get
 RUN apt-get update -y && \
-    apt-get install -y wget ca-certificates git && \
-    # install pip
-    apt-get install -y python3-pip && \
+    apt-get install -y wget ca-certificates git python3-pip vim && \
+    # Install conda
     wget \
     https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
     mkdir /root/.conda && \
