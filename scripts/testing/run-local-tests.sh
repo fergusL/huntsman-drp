@@ -1,23 +1,25 @@
 #!/bin/bash
 # This script is run from outside of the docker environment
+# To run without building new docker images, use --no-build
 set -eu
+ARG1=${1:-"--build"}
 
-HUNTSMAN_DRP_COVDIR=${HUNTSMAN_DRP_COVDIR:-${HUNTSMAN_DRP}/coverage}
 COMPOSE_FILE=${HUNTSMAN_DRP}/docker/testing/docker-compose.yml
+export HUNTSMAN_LOG_DIR=${HUNTSMAN_LOG_DIR:-${HUNTSMAN_DRP}/logs}
 
 function cleanup {
   echo "Stopping docker testing services."
   docker-compose -f ${COMPOSE_FILE} down
 }
 
-mkdir -p ${HUNTSMAN_DRP_COVDIR} && chmod -R 777 ${HUNTSMAN_DRP_COVDIR}
+echo "Local log directory: ${HUNTSMAN_LOG_DIR}"
+mkdir -p ${HUNTSMAN_LOG_DIR} && chmod -R 777 ${HUNTSMAN_LOG_DIR}
 
-echo "Building new docker image(s) for testing..."
-docker-compose -f ${COMPOSE_FILE} build python-tests
+if [ ${ARG1} != "--no-build" ]; then
+  echo "Building new docker image(s) for testing..."
+  docker-compose -f ${COMPOSE_FILE} build python-tests
+fi
 
 echo "Running python tests inside docker container..."
 trap cleanup EXIT
-docker-compose -f ${COMPOSE_FILE} run --rm \
-  -e "HUNTSMAN_COVERAGE=/opt/lsst/software/stack/coverage" \
-  -v "${HUNTSMAN_DRP_COVDIR}:/opt/lsst/software/stack/coverage" \
-  python-tests
+docker-compose -f ${COMPOSE_FILE} run --rm python-tests

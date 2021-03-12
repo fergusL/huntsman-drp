@@ -2,6 +2,7 @@ ARG base_image=gcr.io/panoptes-exp/panoptes-plate-solver
 FROM ${base_image}
 
 ENV PATH="/root/miniconda3/bin:${PATH}"
+ENV HUNTSMAN_LOG_DIR=/home/huntsman-logs
 
 USER root
 # update apt-get
@@ -23,7 +24,9 @@ RUN apt-get update -y && \
     pip uninstall -y coverage && \
     pip install coverage==4.5.4 && \
     cd /home/ && git clone https://github.com/AstroHuntsman/huntsman-drp.git && \
-    cd /home/huntsman-drp && python setup.py develop
+    cd /home/huntsman-drp && python setup.py develop && \
+      # Make directories for logs and set permissions
+    mkdir -p "${HUNTSMAN_LOG_DIR}"
 
 WORKDIR /home
 ADD docker/screener/bash-config.sh .

@@ -116,5 +116,6 @@ config/*_local*
 
 # huntsman-drp specific
 nifi/src
+logs/
 
 =======

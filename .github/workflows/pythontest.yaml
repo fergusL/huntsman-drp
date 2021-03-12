@@ -29,15 +29,11 @@ jobs:
     env:
       HUNTSMAN_DRP: ${{ github.workspace }}/huntsman-drp
       OBS_HUNTSMAN: ${{ github.workspace }}/obs_huntsman
-      HUNTSMAN_DRP_COVDIR: ${{ github.workspace }}/coverage
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: [3.8]
     steps:
-      -
-        name: Make coverage directory
-        run: mkdir ${{ env.HUNTSMAN_DRP_COVDIR }} && chmod -R 777 ${{ env.HUNTSMAN_DRP_COVDIR }}
       -
         name: Checkout huntsman-drp
         uses: actions/checkout@v2
@@ -59,5 +55,5 @@ jobs:
         if: success()
         with:
           name: codecov-upload
-          file: ${{ env.HUNTSMAN_DRP_COVDIR }}/coverage.xml
+          file: ${{ env.HUNTSMAN_DRP }}/logs/coverage.xml
           fail_ci_if_error: true
