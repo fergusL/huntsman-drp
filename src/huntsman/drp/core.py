@@ -75,7 +75,7 @@ def get_logger(backupCount=5, maxBytes=256000000):
     """
     # Get the logs directory
     try:
-        logdir = os.environ["HUNTSMAN_DRP_LOGS"]
+        logdir = os.environ["HUNTSMAN_LOG_DIR"]
     except KeyError:
         try:
             logdir = os.path.join(os.environ["HUNTSMAN_DRP"], "logs")
