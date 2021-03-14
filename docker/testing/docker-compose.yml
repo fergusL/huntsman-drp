@@ -1,5 +1,7 @@
 version: '3'
+
 services:
+
   mongo:
     image: mongo:latest
     restart: always
@@ -7,20 +9,22 @@ services:
       - 27017:27017
     logging:
         driver: none
-  python_tests:
+
+  python-tests:
     image: huntsmanarray/drp-lsst:develop
-    depends_on:
-    - mongo
     build:
-      context: "${HUNTSMAN_DRP}/docker"
+      context: ../..
+      dockerfile: docker/Dockerfile
+    depends_on:
+      - mongo
     network_mode: "host"
     stdin_open: true
     tty: true
     volumes:
       - ${OBS_HUNTSMAN}:/opt/lsst/software/stack/obs_huntsman
       - ${HUNTSMAN_DRP}:/opt/lsst/software/stack/huntsman-drp
+      - ${HUNTSMAN_LOG_DIR}:/opt/lsst/software/stack/huntsman-logs
     environment:
       - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
       - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
-      - HUNTSMAN_MOUNT=/opt/lsst/software/stack/huntsman
-    command: /opt/lsst/software/stack/huntsman-drp/scripts/testing/run_docker_tests.sh
+    command: /opt/lsst/software/stack/huntsman-drp/scripts/testing/run-docker-tests.sh
