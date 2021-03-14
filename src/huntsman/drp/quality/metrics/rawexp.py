@@ -2,11 +2,12 @@ from astropy import stats
 from astropy.wcs import WCS
 from panoptes.utils.images.fits import get_solve_field
 from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header
+from huntsman.drp.core import get_logger
 
 RAW_METRICS = ("get_wcs", "clipped_stats", "flipped_asymmetry")
 
 
-def get_wcs(filename, *args, timeout=60, downsample=4, radius=5):
+def get_wcs(filename, *args, timeout=60, downsample=4, radius=5, logger=None):
     """Function to call get_solve_field on a file and verify
     if a WCS solution could be found.
 
@@ -20,6 +21,8 @@ def get_wcs(filename, *args, timeout=60, downsample=4, radius=5):
         dict: dictionary containing metadata.
     """
     has_wcs = False
+    if logger is None:
+        logger = get_logger()
 
     # Create list of args to pass to solve_field
     solve_kwargs = {'--cpulimit': timeout,
@@ -31,10 +34,10 @@ def get_wcs(filename, *args, timeout=60, downsample=4, radius=5):
         parsed_hdr = FitsHeaderTranslator().parse_header(hdr)
         ra = hdr.get('RA-MNT')
         dec = hdr.get('DEC-MNT')
-    except KeyError:
-        pass
+    except KeyError as ke:
+        logger.error(f"Unable to read file header for {filename}: {ke}")
 
-    if 'ra' and 'dec' in vars():
+    if ra and dec in vars() and ra and dec is not None:
         solve_kwargs['--ra'] = ra
         solve_kwargs['--dec'] = dec
         solve_kwargs['--radius'] = radius
