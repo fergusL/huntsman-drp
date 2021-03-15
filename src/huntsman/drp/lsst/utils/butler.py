@@ -138,22 +138,3 @@ def data_id_to_calib_id(datasetType, data_ids, butler, keys_ignore=None):
         calib_keys = [k for k in calib_keys if k not in keys_ignore]
     calib_ids = [{k: data_id[k] for k in calib_keys} for data_id in data_ids]
     return calib_ids
-
-
-def get_data_ids(butler, datasetType, dataId=None, extra_keys=None):
-    """ Get dataIds for datasetType.
-    Args:
-        butler (butler): The butler object.
-        datasetType (str): The datasetType (raw, bias, flat etc.).
-        dataId (dict, optional): A complete or partial dataId to match with.
-        extra_keys (list, optional): List of additional keys to be included in the dataIds.
-    Returns:
-        list of dict: A list of dataIds.
-    """
-    keys = list(butler.getKeys(datasetType).keys())
-    if extra_keys is not None:
-        keys.extend(extra_keys)
-
-    value_list = butler.queryMetadata(datasetType, format=keys, dataId=dataId)
-
-    return [{k: v for k, v in zip(keys, _)} for _ in value_list]
