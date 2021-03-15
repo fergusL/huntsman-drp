@@ -9,7 +9,7 @@ def test_initialise(butler_repos):
     """Make sure the repos are created properly"""
     for butler_repo in butler_repos:
         with butler_repo:
-            for dir in [butler_repo.butler_directory, butler_repo.calib_directory]:
+            for dir in [butler_repo.butler_dir, butler_repo.calib_dir]:
                 assert os.path.isdir(dir)
                 assert "_mapper" in os.listdir(dir)
             assert butler_repo.get_butler() is not None
@@ -17,7 +17,7 @@ def test_initialise(butler_repos):
 
 def test_temp_repo(temp_butler_repo):
     """Test the temp butler repo behaves as expected"""
-    attrs = ["butler_directory", "calib_directory"]
+    attrs = ["butler_dir", "calib_dir"]
     for a in attrs:
         assert getattr(temp_butler_repo, a) is None
     with temp_butler_repo:
@@ -92,7 +92,7 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         br.archive_master_calibs()
 
         # Check the biases in the butler dir
-        metadata_bias = br.query_calib_metadata(datasetType="bias")
+        metadata_bias = br.get_calib_metadata(dataset_type="bias")
         assert len(metadata_bias) == n_bias
         ccds = set()
         for md in metadata_bias:
@@ -100,7 +100,7 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         assert len(ccds) == test_config["n_cameras"]
 
         # Check the darks in the butler dir
-        metadata_dark = br.query_calib_metadata(datasetType="dark")
+        metadata_dark = br.get_calib_metadata(dataset_type="dark")
         assert len(metadata_dark) == n_dark
         ccds = set()
         for md in metadata_dark:
@@ -108,7 +108,7 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         assert len(ccds) == test_config["n_cameras"]
 
         # Check the flats in the butler dir
-        metadata_flat = br.query_calib_metadata(datasetType="flat")
+        metadata_flat = br.get_calib_metadata(dataset_type="flat")
         assert len(metadata_flat) == n_flat
         filters = set()
         ccds = set()
@@ -131,11 +131,16 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
             assert os.path.isfile(filename)
 
 
-def test_make_calexp(tmpdir):
-    """ Test that we can make calibrated exposures. """
+def test_make_coadd(tmpdir):
+    """ Test that we can make coadds. """
     br = create_test_bulter_repository(str(tmpdir))
+
     br.make_master_calibs()
+
     br.make_calexps()
+
+    br.make_coadd()  # Implicit verification
+
     calexps, data_ids = br.get_calexps()
     assert len(calexps) == 1
     assert len(data_ids) == 1
