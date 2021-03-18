@@ -17,10 +17,11 @@ def screen_success(file_info, logger=None):
     if logger is None:
         logger = get_logger()
     try:
-        return bool(file_info["quality"]["screen_success"])
         logger.debug(
             f'Screen success for file [{file_info["filename"]}] is: \
                 {bool(file_info["quality"]["screen_success"])}')
+        return bool(file_info["quality"]["screen_success"])
+
     except KeyError:
         return False
 
