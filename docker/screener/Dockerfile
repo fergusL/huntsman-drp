@@ -22,10 +22,13 @@ RUN apt-get update -y && \
   # Downgrade coverage version to avoid pytest issues
   pip uninstall -y coverage && \
   pip install coverage==4.5.4 && \
-  cd /home/ && git clone https://github.com/AstroHuntsman/huntsman-drp.git && \
-  cd /home/huntsman-drp && python setup.py develop && \
+  cd /home/ && mkdir -p huntsman-drp && \
   # Make directories for logs and set permissions
   mkdir -p "${HUNTSMAN_LOG_DIR}"
+
+# Copy huntsman-drp into the image and install
+COPY --chown="${USER}:${USER}" ../../. /home/huntsman-drp
+RUN cd /home/huntsman-drp && python setup.py develop
 
 WORKDIR /home
 ADD bash-config.sh .
