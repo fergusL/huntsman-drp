@@ -16,7 +16,7 @@ def test_screener_ingest(tempdir_and_exposure_table_with_uningested_files, confi
     n_to_screen = len(os.listdir(tempdir))
     assert n_to_ingest > 0
 
-    screener = Screener(exposure_table=exposure_table, sleep_interval=0.1, status_interval=0.1,
+    screener = Screener(exposure_table=exposure_table, sleep_interval=1, status_interval=1,
                         monitored_directory=tempdir)
     # don't want to run astrometry tasks as tests running in drp-lsst container
     # not the drp container
@@ -24,19 +24,26 @@ def test_screener_ingest(tempdir_and_exposure_table_with_uningested_files, confi
 
     screener.start()
     i = 0
-    timeout = 5
+    timeout = 10
     try:
-        while (i < timeout) and (screener.status["ingested"] != n_to_ingest) and \
-                (screener.status["screened"] != n_to_screen) and screener.is_running:
+        while (i < timeout):
+            cond = screener.status["ingested"] == n_to_ingest
+            cond &= screener.status["screened"] == n_to_screen
+            cond &= screener.is_running
+            if cond:
+                break
             i += 1
             time.sleep(1)
+
         if i == timeout:
-            raise RuntimeError(
-                f"Timeout while waiting for processing of {n_to_ingest} images.")
+            raise RuntimeError(f"Timeout while waiting for processing of {n_to_ingest} images.")
+
         if not screener.is_running:
             raise RuntimeError("Screener has stopped running.")
+
         for md in exposure_table.find():
             assert "rawexp" in md["quality"].keys()
+
         for metric_value in md["quality"]["rawexp"].values():
             assert metric_value is not None
     finally:

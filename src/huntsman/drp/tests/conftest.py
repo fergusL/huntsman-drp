@@ -8,6 +8,7 @@ from huntsman.drp.datatable import ExposureTable
 from huntsman.drp.refcat import TapReferenceCatalogue
 from huntsman.drp.butler import ButlerRepository, TemporaryButlerRepository
 from huntsman.drp.utils.testing import get_testdata_fits_filenames
+from huntsman.drp.calibs import MasterCalibMaker
 
 # ===========================================================================
 # Config
@@ -109,6 +110,30 @@ def exposure_table_real_data(config, fits_header_translator):
     # Remove the metadata from the DB ready for other tests
     all_metadata = exposure_table.find()
     exposure_table.delete_many(all_metadata)
+
+
+@pytest.fixture(scope="function")
+def master_calib_table_real_data(exposure_table_real_data, config):
+    """ Make a master calib table by reducing real calib data.
+    TODO: Store created files so they can be copied in for quicker tests.
+    """
+
+    calib_maker = MasterCalibMaker(exposure_table=exposure_table_real_data, config=config)
+    calib_maker.logger.info("Creating master calibs for tests.")
+
+    # Make master calibs
+    dates = calib_maker._get_unique_dates()
+    for date in dates[:1]:  # Limit to one date for now
+        calib_maker.process_date(date)
+
+    calib_maker.logger.info("Finished creating master calibs for tests.")
+
+    calib_table = calib_maker._calib_table
+    yield calib_table
+
+    # Remove the metadata from the DB ready for other tests
+    all_metadata = calib_table.find()
+    calib_table.delete_many(all_metadata)
 
 
 @pytest.fixture(scope="function")

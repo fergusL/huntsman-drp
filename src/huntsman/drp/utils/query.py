@@ -1,3 +1,4 @@
+from contextlib import suppress
 from collections import abc, MutableMapping
 from copy import deepcopy
 from collections import defaultdict
@@ -53,11 +54,19 @@ class Query():
         """
         if document is None:
             document = {}
+
         if constraints is None:
             constraints = {}
 
+        with suppress(AttributeError):
+            document = document.to_dict()
+
+        with suppress(AttributeError):
+            constraints = constraints.to_dict()
+
         if not isinstance(document, abc.Mapping):
             raise TypeError(f"document should be a mapping, got {type(document)}.")
+
         if not isinstance(constraints, abc.Mapping):
             raise TypeError(f"constraints should be a mapping, got {type(constraints)}.")
 

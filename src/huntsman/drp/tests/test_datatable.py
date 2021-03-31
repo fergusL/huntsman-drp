@@ -45,8 +45,10 @@ def test_query_latest(exposure_table, config, tol=1):
     n_days = config["exposure_sequence"]["n_days"]
     date_start = parse_date(date_start)
     date_now = current_date()
+
     if date_now <= date_start + timedelta(days=n_days):
-        pytest.skip(f"Test does not work unless current date is later than all test exposures.")
+        pytest.skip("Test does not work unless current date is later than all test exposures.")
+
     timediff = date_now - date_start
     # This should capture all the files
     qresult = exposure_table.find_latest(days=timediff.days + tol)

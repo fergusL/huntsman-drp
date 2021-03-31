@@ -11,6 +11,7 @@ from pymongo.errors import ServerSelectionTimeoutError
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import current_date, parse_date
 from huntsman.drp.utils.query import Query
+from huntsman.drp.dataid import RawExposureId, CalibId
 from huntsman.drp.utils.mongo import encode_mongo_query
 
 
@@ -18,7 +19,6 @@ class DataTable(HuntsmanBase):
     """ This class is used to interface with the mongodb. It is responsible for performing queries
     and inserting/updating/deleting documents, as well as validating new documents.
     """
-    _required_columns = None
     _unique_columns = "filename",  # Required to identify a unique document
 
     def __init__(self, table_name, **kwargs):
@@ -31,74 +31,43 @@ class DataTable(HuntsmanBase):
         db_name = self.config["mongodb"]["db_name"]
         self._connect(db_name, self._table_name)
 
-    def _connect(self, db_name, table_name):
-        """ Initialise the database.
-        Args:
-            db_name (str): The name of the (mongo) database.
-            table_name (str): The name of the table (mongo collection).
-        """
-        # Connect to the mongodb
-        hostname = self.config["mongodb"]["hostname"]
-        port = self.config["mongodb"]["port"]
-        if "username" in self.config["mongodb"].keys():
-            username = quote_plus(self.config["mongodb"]["username"])
-            password = quote_plus(self.config["mongodb"]["password"])
-            uri = f"mongodb://{username}:{password}@{hostname}/{db_name}?ssl=true"
-            self._client = MongoClient(uri)
-        else:
-            self._client = MongoClient(hostname, port)
-        try:
-            self._client.server_info()
-            self.logger.info(f"Connected to mongodb at {hostname}:{port}.")
-        except ServerSelectionTimeoutError as err:
-            self.logger.error(f"Unable to connect to mongodb at {hostname}:{port}.")
-            raise err
-        self._db = self._client[db_name]
-        self._table = self._db[table_name]
+    # Public methods
 
     def count_documents(self, document_filter=None):
         """ Count the number of documents (matching document_filter criteria) in table.
-
-        Parameters
-        ----------
-        document_filter : dict, optional
-            A dictionary containing key, value pairs to be matched against other documents,
-            by default None
-
-        Returns
-        -------
-        int
-            The number of matching documents in the table.
+        Args:
+            document_filter (dict, optional): A dictionary containing key, value pairs to be matched
+            against other documents, by default None
+        Returns:
+            int: The number of matching documents in the table.
         """
         if document_filter is None:
             document_filter = {}
         return self._table.count_documents(document_filter)
 
     def find(self, document_filter=None, constraints=None, date_start=None, date_end=None,
-             date=None, key=None):
+             date=None, key=None, screen=False):
         """Get data for one or more matches in the table.
-
-        Parameters
-        ----------
-        document_filter : dict, optional
-            A dictionary containing key, value pairs to be matched against other documents,
-            by default None
-        constraints : dict, optional
-            A dictionary containing other search criteria which can include the mongo operators
-            defined in the `huntsman.drp.utils.mongo.MONGO_OPERATORS`, by default None.
-        date_start : object, optional
-            Constrain query to a timeframe starting at date_start, by default None.
-        date_end : object, optional
-            Constrain query to a timeframe ending at date_end, by default None.
-        date : object, optional
-            Constrain query to specific date, by default None.
-        key : str, optional
-            Specify a specific key to be returned from the query (e.g. filename), by default None.
-
-        Returns
-        -------
-        result: list or np.array
-            Result of the query. If key is specified result will be a np.array(?)
+        Args:
+            document_filter (dict, optional): A dictionary containing key, value pairs to be
+                matched against other documents, by default None
+            constraints (dict, optional): A dictionary containing other search criteria which can
+                include the operators defined in the `huntsman.drp.utils.mongo.MONGO_OPERATORS`,
+                by default None.
+            date_start (object, optional): Constrain query to a timeframe starting at date_start,
+                by default None.
+            date_end (object, optional): Constrain query to a timeframe ending at date_end, by
+                default None.
+            date (object, optional):
+                Constrain query to specific date, by default None.
+            key (str, optional):
+                Specify a specific key to be returned from the query (e.g. filename), by default
+                None.
+            screen: (bool, optional): If True, only results that satisfy screening will be returned.
+                Default False.
+        Returns:
+            result (list or np.array): Result of the query. If key is specified result will be a
+                np.array(?)
         """
         if constraints is None:
             constraints = {}
@@ -113,6 +82,10 @@ class DataTable(HuntsmanBase):
         if date is not None:
             constraint.update({"equal": parse_date(date)})
         constraints[self._date_key] = constraint
+
+        # TODO: Apply screening
+        if screen:
+            pass
 
         # Get the mongodb query
         query = Query(document=document_filter, constraints=constraints).to_mongo()
@@ -147,13 +120,15 @@ class DataTable(HuntsmanBase):
             If True override any existing document, by default False.
 
         """
-        document = encode_mongo_query(document)
-
         # Check the required columns exist in the new document
-        if self._required_columns is not None:
-            for column_name in self._required_columns:
-                if column_name not in document.keys():
-                    raise ValueError(f"New document missing required column: {column_name}.")
+        document = self._data_id_type(document).to_dict()
+
+        # Add date records
+        document["date_created"] = current_date()
+        document["date_modified"] = current_date()
+
+        # Prepare document for insertion
+        document = encode_mongo_query(document)
 
         # Check there is at most one match in the table
         count = self._table.count_documents(document)
@@ -172,20 +147,20 @@ class DataTable(HuntsmanBase):
 
     def update_one(self, document_filter, to_update, upsert=False):
         """ Update a single document in the table.
-
-        Parameters
-        ----------
-        document_filter : dict, optional
-            A dictionary containing key, value pairs used to identify the document to update,
-            by default None
-        to_update : dict
-            The key, value pairs to update within the matched document.
-        upsert : bool, optional
-            If True perform the insert even if no matching documents are found,
-            by default False
-
-        https://docs.mongodb.com/manual/reference/operator/update/set/#up._S_set
+        See: https://docs.mongodb.com/manual/reference/operator/update/set/#up._S_set
+        Args:
+            document_filter (dict): A dictionary containing key, value pairs used to identify
+                the document to update, by default None.
+            to_update (dict): The key, value pairs to update within the matched document.
+                upsert (bool, optional): If True perform the insert even if no matching documents
+                are found, by default False
         """
+        # Add date record
+        to_update = to_update.copy()
+        to_update["date_modified"] = current_date()
+
+        self.logger.debug(f"Updating document with {to_update}.")
+
         document = encode_mongo_query(document_filter)
         to_update = encode_mongo_query(to_update)
 
@@ -236,6 +211,16 @@ class DataTable(HuntsmanBase):
         """
         return [self.delete_one(d, **kwargs) for d in documents]
 
+    def get_data_ids(self, *args, **kwargs):
+        """ Return a list of data IDs objects.
+        Args:
+            *args, **kwargs: Parsed to self.find.
+        Returns:
+            list of huntsman.drp.dataid.DataId: The matching data IDs.
+        """
+        documents = self.find(*args, **kwargs)
+        return [self._data_id_type(d, config=self.config) for d in documents]
+
     def find_latest(self, days=0, hours=0, seconds=0, **kwargs):
         """ Convenience function to query the latest files in the db.
         Args:
@@ -248,6 +233,33 @@ class DataTable(HuntsmanBase):
         date_now = current_date()
         date_start = date_now - timedelta(days=days, hours=hours, seconds=seconds)
         return self.find(date_start=date_start, **kwargs)
+
+    # Private methods
+
+    def _connect(self, db_name, table_name):
+        """ Initialise the database.
+        Args:
+            db_name (str): The name of the (mongo) database.
+            table_name (str): The name of the table (mongo collection).
+        """
+        # Connect to the mongodb
+        hostname = self.config["mongodb"]["hostname"]
+        port = self.config["mongodb"]["port"]
+        if "username" in self.config["mongodb"].keys():
+            username = quote_plus(self.config["mongodb"]["username"])
+            password = quote_plus(self.config["mongodb"]["password"])
+            uri = f"mongodb://{username}:{password}@{hostname}/{db_name}?ssl=true"
+            self._client = MongoClient(uri)
+        else:
+            self._client = MongoClient(hostname, port)
+        try:
+            self._client.server_info()
+            self.logger.info(f"{self} connected to mongodb at {hostname}:{port}.")
+        except ServerSelectionTimeoutError as err:
+            self.logger.error(f"Unable to connect {self} to mongodb at {hostname}:{port}.")
+            raise err
+        self._db = self._client[db_name]
+        self._table = self._db[table_name]
 
     def _get_unique_id(self, metadata):
         """ Return the unique identifier for the metadata.
@@ -269,10 +281,12 @@ class DataTable(HuntsmanBase):
 class ExposureTable(DataTable):
     """ Table to store metadata for Huntsman exposures. """
 
+    _data_id_type = RawExposureId
+
     def __init__(self, table_name="raw_data", **kwargs):
         super().__init__(table_name=table_name, **kwargs)
-        self._required_columns = self.config["fits_header"]["required_columns"]
 
+    # TODO: Remove
     def find_matching_raw_calibs(self, filename, days=None, **kwargs):
         """ Get matching calibs for a given file.
         """
@@ -319,7 +333,50 @@ class ExposureTable(DataTable):
 
 class MasterCalibTable(DataTable):
     """ Table to store metadata for master calibs. """
-    _required_columns = ("filename", "calibDate")  # TODO: Move to config
+
+    _data_id_type = CalibId
 
     def __init__(self, table_name="master_calib", **kwargs):
         super().__init__(table_name=table_name, **kwargs)
+
+        self._calib_types = self.config["calibs"]["types"]
+        self._matching_keys = self.config["calibs"]["matching_columns"]
+
+        # Calib validity
+        # TODO: datasetType dependence?
+        self._validity = timedelta(days=self.config["calibs"]["validity"])
+
+    def get_matching_calibs(self, data_id, calib_date):
+        """ Return matching set of calib IDs for a given data_id and calib_date.
+        Args:
+            data_id (object): An object that can be interpreted as a data ID.
+            calib_date (object): An object that can be interpreted as a date.
+        Returns:
+            dict: A dict of datasetType: filename.
+        Raises:
+            FileNotFoundError: If there is no matching calib.
+        """
+        calib_date = parse_date(calib_date)
+
+        result = {}
+        for calib_type in self._calib_types:
+
+            err_msg = (f"No matching master {calib_type} for dataId={data_id},"
+                       f" calibDate={calib_date}.")
+
+            doc_filter = {k: data_id[k] for k in self._matching_keys[calib_type]}
+            doc_filter["datasetType"] = calib_type
+
+            calib_ids = self.find(doc_filter)
+            dates = [parse_date(_["calibDate"]) for _ in calib_ids]
+
+            if len(dates) == 0:
+                raise FileNotFoundError(err_msg)
+
+            timediffs = [abs(calib_date - d) for d in dates]
+            if min(timediffs) > self._validity:
+                raise FileNotFoundError(err_msg)
+
+            result[calib_type] = calib_ids[np.argmin(timediffs)]
+
+        return result

@@ -135,7 +135,7 @@ def test_make_coadd(tmpdir):
     """ Test that we can make coadds. """
     br = create_test_bulter_repository(str(tmpdir))
 
-    br.make_master_calibs()
+    br.make_master_calibs(validity=1000)
 
     br.make_calexps()
 

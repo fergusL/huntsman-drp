@@ -267,7 +267,7 @@ class Screener(HuntsmanBase):
                 continue
             # if the file represented by this entry hasn't been
             # screened and isn't in the queue, add it to queue
-            if not screen_success(document, logger=self.logger):
+            if not screen_success(document):
                 # extract fname from entry and append that instead
                 files_to_screen.append(document['filename'])
 

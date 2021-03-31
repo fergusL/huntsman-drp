@@ -1,5 +1,5 @@
 directories:
-  archive: ${HUNTSMAN_MOUNT}/archive
+  archive: ${HUNTSMAN_ARCHIVE}
 
 fits_header:
   date_key: "DATE-OBS"
@@ -66,7 +66,7 @@ calibs:
     - flat
     - bias
     - dark
-  validity: 1000
+  validity: 30
   matching_columns:  # These columns are for matching raw calibs with raw science frames
     flat:
       - filter

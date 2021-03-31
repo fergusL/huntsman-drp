@@ -11,16 +11,15 @@ METRICS = "clipped_stats", "flipped_asymmetry"  # TODO: Refactor!
 QUALITY_FLAG_NAME = "quality_success_flag"
 
 
-def screen_success(file_info, logger=None):
+def screen_success(document):
+    """ Test if the file has passed screening.
+    Args:
+        document (dict): The document for the file.
+    Returns:
+        bool: True if success, else False.
     """
-    """
-    if logger is None:
-        logger = get_logger()
     try:
-        return bool(file_info["quality"]["screen_success"])
-        logger.debug(
-            f'Screen success for file [{file_info["filename"]}] is: \
-                {bool(file_info["quality"]["screen_success"])}')
+        return bool(document["quality"]["screen_success"])
     except KeyError:
         return False
 
