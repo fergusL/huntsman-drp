@@ -125,7 +125,7 @@ class MasterCalibMaker(HuntsmanBase):
 
     # Private methods
 
-    def _run(self, sleep=60):
+    def _run(self, sleep=300):
         """ Continually call self.process_date for each unique calib date.
         Args:
             sleep (float, optional): Sleep for this long between restarts.
@@ -136,15 +136,15 @@ class MasterCalibMaker(HuntsmanBase):
             self.logger.info(f"Found {len(calib_dates)} unique calib dates.")
 
             for calib_date in calib_dates:
-                self.logger.info(f"Processing calibs for calib_date={calib_date}.")
 
                 if self._stop_threads:
                     return
 
+                self.logger.info(f"Processing calibs for calib_date={calib_date}.")
                 self.process_date(calib_date)
 
-        self.logger.info(f"Finished processing calib dates. Sleeping for {sleep} seconds.")
-        time.sleep(sleep)
+            self.logger.info(f"Finished processing calib dates. Sleeping for {sleep} seconds.")
+            time.sleep(sleep)
 
     def _should_process(self, calib_id, raw_data_ids):
         """ Check if the given calib_id should be processed based on existing raw data.
