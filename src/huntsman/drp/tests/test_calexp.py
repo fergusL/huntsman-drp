@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 
 from huntsman.drp import quality
-from huntsman.drp.quality.calexp import CalexpQualityMonitor
+from huntsman.drp.calexp import CalexpQualityMonitor
 
 
 @pytest.fixture(scope="function")

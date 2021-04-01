@@ -1,5 +1,5 @@
 """Code to interface with the Huntsman mongo database."""
-from copy import deepcopy
+from contextlib import suppress
 from datetime import timedelta
 from urllib.parse import quote_plus
 
@@ -10,9 +10,9 @@ from pymongo.errors import ServerSelectionTimeoutError
 
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import current_date, parse_date
-from huntsman.drp.utils.query import Query
-from huntsman.drp.dataid import RawExposureId, CalibId
-from huntsman.drp.utils.mongo import encode_mongo_query
+from huntsman.drp.document import Document, RawExposureDocument, CalibDocument
+from huntsman.drp.utils.mongo import encode_mongo_filter, mongo_logical_or, mongo_logical_and
+from huntsman.drp.utils.screening import SCREEN_SUCCESS_FLAG
 
 
 class DataTable(HuntsmanBase):
@@ -45,15 +45,12 @@ class DataTable(HuntsmanBase):
             document_filter = {}
         return self._table.count_documents(document_filter)
 
-    def find(self, document_filter=None, constraints=None, date_start=None, date_end=None,
-             date=None, key=None, screen=False):
+    def find(self, document_filter=None, date_start=None, date_end=None, date=None, key=None,
+             screen=False, quality_filter=False):
         """Get data for one or more matches in the table.
         Args:
             document_filter (dict, optional): A dictionary containing key, value pairs to be
                 matched against other documents, by default None
-            constraints (dict, optional): A dictionary containing other search criteria which can
-                include the operators defined in the `huntsman.drp.utils.mongo.MONGO_OPERATORS`,
-                by default None.
             date_start (object, optional): Constrain query to a timeframe starting at date_start,
                 by default None.
             date_end (object, optional): Constrain query to a timeframe ending at date_end, by
@@ -63,41 +60,50 @@ class DataTable(HuntsmanBase):
             key (str, optional):
                 Specify a specific key to be returned from the query (e.g. filename), by default
                 None.
-            screen: (bool, optional): If True, only results that satisfy screening will be returned.
+            screen (bool, optional): If True, only return documents that passed screening.
                 Default False.
+            quality_filter (bool, optional): If True, only return documents that satisfy quality
+                cuts. Default False.
         Returns:
-            result (list or np.array): Result of the query. If key is specified result will be a
-                np.array(?)
+            result (list): List of DataIds or key values if key is specified.
         """
-        if constraints is None:
-            constraints = {}
-        constraints = deepcopy(constraints)
+        document_filter = Document(document_filter)
+        with suppress(KeyError):
+            del document_filter["date_modified"]  # This might change so don't match with it
 
         # Add date range to criteria if provided
-        constraint = {}
+        date_constraint = {}
+
         if date_start is not None:
-            constraint.update({"greater_than_equal": parse_date(date_start)})
+            date_constraint.update({"greater_than_equal": parse_date(date_start)})
         if date_end is not None:
-            constraint.update({"less_than": parse_date(date_end)})
+            date_constraint.update({"less_than": parse_date(date_end)})
         if date is not None:
-            constraint.update({"equal": parse_date(date)})
-        constraints[self._date_key] = constraint
+            date_constraint.update({"equal": parse_date(date)})
 
-        # TODO: Apply screening
+        document_filter.update({self._date_key: date_constraint})
+
+        # Screen the results if necessary
         if screen:
-            pass
+            document_filter[SCREEN_SUCCESS_FLAG] = True
 
-        # Get the mongodb query
-        query = Query(document=document_filter, constraints=constraints).to_mongo()
-        self.logger.debug(f"Performing mongo query: {query}.")
+        mongo_filter = document_filter.to_mongo()
 
-        result = list(self._table.find(query))
-        self.logger.debug(f"Query returned {len(result)} results.")
+        # Apply quality cuts
+        if quality_filter:
+            mongo_quality_filter = self._get_quality_filter()
+            if mongo_quality_filter:
+                mongo_filter = mongo_logical_and([mongo_filter, mongo_quality_filter])
+
+        self.logger.debug(f"Performing mongo find operation with filter: {mongo_filter}.")
+
+        documents = list(self._table.find(mongo_filter, {"_id": False}))
+        self.logger.debug(f"Find operation returned {len(documents)} results.")
 
         if key is not None:
-            result = np.array([d[key] for d in result])
+            return [d[key] for d in documents]
 
-        return result
+        return [self._data_id_type(d, config=self.config) for d in documents]
 
     def find_one(self, *args, **kwargs):
         """ Find a single matching document, making sure only one document is matched.
@@ -111,39 +117,34 @@ class DataTable(HuntsmanBase):
 
     def insert_one(self, document, overwrite=False):
         """Insert a new document into the table after ensuring it is valid and unique.
-
-        Parameters
-        ----------
-        document : dict
-            The document to be inserted into the table.
-        overwrite : bool, optional
-            If True override any existing document, by default False.
-
+        Args:
+            document (dict): The document to be inserted into the table.
+            overwrite (bool, optional): If True override any existing document, by default False.
         """
         # Check the required columns exist in the new document
-        document = self._data_id_type(document).to_dict()
+        document = self._data_id_type(document)
 
         # Add date records
         document["date_created"] = current_date()
         document["date_modified"] = current_date()
 
         # Prepare document for insertion
-        document = encode_mongo_query(document)
+        mongo_doc = document.to_mongo()
 
         # Check there is at most one match in the table
-        count = self._table.count_documents(document)
+        count = self._table.count_documents(mongo_doc)
         if count == 1:
             if overwrite:
-                self.delete(document)
+                self.delete(mongo_doc)
             else:
-                raise RuntimeError(f"Found existing document for {document} in {self}."
+                raise RuntimeError(f"Found existing document for {mongo_doc} in {self}."
                                    " Pass overwrite=True to overwrite.")
         elif count != 0:
-            raise RuntimeError(f"Multiple matches found for document in {self}: {document}.")
+            raise RuntimeError(f"Multiple matches found for document in {self}: {mongo_doc}.")
 
         # Insert the document
         self.logger.debug(f"Inserting new document into {self}: {document}.")
-        self._table.insert_one(document)
+        self._table.insert_one(mongo_doc)
 
     def update_one(self, document_filter, to_update, upsert=False):
         """ Update a single document in the table.
@@ -152,74 +153,59 @@ class DataTable(HuntsmanBase):
             document_filter (dict): A dictionary containing key, value pairs used to identify
                 the document to update, by default None.
             to_update (dict): The key, value pairs to update within the matched document.
-                upsert (bool, optional): If True perform the insert even if no matching documents
-                are found, by default False
+            upsert (bool, optional): If True perform the insert even if no matching documents
+                are found, by default False.
         """
-        # Add date record
-        to_update = to_update.copy()
+        document_filter = Document(document_filter)
+        with suppress(KeyError):
+            del document_filter["date_modified"]  # This might change so don't match with it
+
+        to_update = Document(to_update)
         to_update["date_modified"] = current_date()
 
-        self.logger.debug(f"Updating document with {to_update}.")
+        mongo_filter = document_filter.to_mongo()
+        mongo_update = to_update.to_mongo()
 
-        document = encode_mongo_query(document_filter)
-        to_update = encode_mongo_query(to_update)
-
-        count = self._table.count_documents(document)
+        count = self._table.count_documents(mongo_filter)
         if count > 1:
-            raise RuntimeError(f"Multiple matches found for document in {self}: {document}.")
+            raise RuntimeError(f"Multiple matches found for document in {self}: {document_filter}.")
         elif (count == 0) and not upsert:
-            raise RuntimeError(f"No matches found for document in {self}. Use upsert=True to"
-                               " upsert.")
-        self._table.update_one(document, {'$set': to_update}, upsert=upsert)
+            raise RuntimeError(f"No matches found for document {document_filter} in {self}. Use"
+                               " upsert=True to upsert.")
+        self._table.update_one(document_filter, {'$set': mongo_update}, upsert=upsert)
 
     def delete_one(self, document_filter):
         """Delete one document from the table.
-
-        Parameters
-        ----------
-        document_filter : dict, optional
-            A dictionary containing key, value pairs used to identify the document to delete,
-            by default None
+        Args:
+            document_filter (dict, optional): A dictionary containing key, value pairs used to
+                identify the document to delete, by default None
         """
-        document = encode_mongo_query(document_filter)
+        document_filter = Document(document_filter)
+        mongo_filter = document_filter.to_mongo()
 
-        count = self._table.count_documents(document)
+        count = self._table.count_documents(mongo_filter)
         if count > 1:
-            raise RuntimeError(f"Multiple matches found for document in {self}: {document}.")
+            raise RuntimeError(f"Multiple matches found for document in {self}: {document_filter}.")
         elif (count == 0):
-            raise RuntimeError(f"No matches found for document in {self}: {document}.")
-        self._table.delete_one(document)
+            raise RuntimeError(f"No matches found for document in {self}: {document_filter}.")
+
+        self._table.delete_one(mongo_filter)
 
     def insert_many(self, documents, **kwargs):
         """Insert a new document into the table.
-
-        Parameters
-        ----------
-        documents : list
-            List of documents to be inserted into the table.
+        Args:
+            documents (list): List of dictionaries that specify documents to be inserted in the
+                table.
         """
         return [self.insert_one(d, **kwargs) for d in documents]
 
     def delete_many(self, documents, **kwargs):
         """ Delete one document from the table.
-
-        Parameters
-        ----------
-        documents : list
-            List of dictionaries that specify documents to be deleted from the table.
-
+        Args:
+            documents (list): List of dictionaries that specify documents to be deleted from the
+                table.
         """
         return [self.delete_one(d, **kwargs) for d in documents]
-
-    def get_data_ids(self, *args, **kwargs):
-        """ Return a list of data IDs objects.
-        Args:
-            *args, **kwargs: Parsed to self.find.
-        Returns:
-            list of huntsman.drp.dataid.DataId: The matching data IDs.
-        """
-        documents = self.find(*args, **kwargs)
-        return [self._data_id_type(d, config=self.config) for d in documents]
 
     def find_latest(self, days=0, hours=0, seconds=0, **kwargs):
         """ Convenience function to query the latest files in the db.
@@ -261,59 +247,20 @@ class DataTable(HuntsmanBase):
         self._db = self._client[db_name]
         self._table = self._db[table_name]
 
-    def _get_unique_id(self, metadata):
-        """ Return the unique identifier for the metadata.
-        Args:
-            metadata (abc.Mapping): The metadata.
-        Returns:
-            dict: The unique document identifier.
-        """
-        try:
-            return encode_mongo_query({k: metadata[k] for k in self._unique_columns})
-        # If there is a key missing, we will have to match with something in the table
-        except KeyError:
-            documents = self.query(metadata)
-            if len(documents) > 1:
-                raise RuntimeError(f"No unique ID for metadata: {metadata}.")
-            return encode_mongo_query({k: documents[0][k] for k in self._unique_columns})
+    def _get_quality_filter(self):
+        """ Return the Query object corresponding to quality cuts. """
+        raise NotImplementedError
 
 
 class ExposureTable(DataTable):
     """ Table to store metadata for Huntsman exposures. """
 
-    _data_id_type = RawExposureId
+    _data_id_type = RawExposureDocument
 
     def __init__(self, table_name="raw_data", **kwargs):
         super().__init__(table_name=table_name, **kwargs)
 
-    # TODO: Remove
-    def find_matching_raw_calibs(self, filename, days=None, **kwargs):
-        """ Get matching calibs for a given file.
-        """
-        # Get metadata for this file
-        document = self.find_one({"filename": filename})
-        date = document[self._date_key]
-
-        # Get date range for calibs
-        if days is None:
-            days = self.config["calibs"]["validity"]
-        date_start = date - timedelta(days=days)
-        date_end = date + timedelta(days=days)
-
-        calib_metadata = []
-        # Loop over raw calib dataTypes
-        for calib_type, matching_columns in self.config["calibs"]["matching_columns"].items():
-
-            # Matching raw calibs must satisfy these criteria
-            document_filter = {m: document[m] for m in matching_columns}
-            document_filter["dataType"] = calib_type
-
-            # TODO: Implement screening
-            documents = self.find(date_start=date_start, date_end=date_end,
-                                  document_filter=document_filter, **kwargs)
-            calib_metadata.extend(documents)
-
-        return calib_metadata
+    # Public methods
 
     def get_metrics(self, *args, **kwargs):
         """
@@ -330,11 +277,30 @@ class ExposureTable(DataTable):
 
         return df
 
+    # Private methods
+
+    def _get_quality_filter(self):
+        """ Return the Query object corresponding to quality cuts.
+        Returns:
+            huntsman.drp.utils.query.Query: The Query object.
+        """
+        quality_config = self.config["quality"]["raw"].copy()
+
+        filters = []
+        for data_type, document_filter in quality_config.items():
+
+            if document_filter:
+                # Create a new document filter for this data type
+                document_filter["dataType"] = data_type
+                filters.append(encode_mongo_filter(document_filter))
+
+        return mongo_logical_or(filters)
+
 
 class MasterCalibTable(DataTable):
     """ Table to store metadata for master calibs. """
 
-    _data_id_type = CalibId
+    _data_id_type = CalibDocument
 
     def __init__(self, table_name="master_calib", **kwargs):
         super().__init__(table_name=table_name, **kwargs)
@@ -342,8 +308,7 @@ class MasterCalibTable(DataTable):
         self._calib_types = self.config["calibs"]["types"]
         self._matching_keys = self.config["calibs"]["matching_columns"]
 
-        # Calib validity
-        # TODO: datasetType dependence?
+        # Calib validity TODO: datasetType dependence?
         self._validity = timedelta(days=self.config["calibs"]["validity"])
 
     def get_matching_calibs(self, data_id, calib_date):

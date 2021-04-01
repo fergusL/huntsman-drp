@@ -4,9 +4,10 @@ import pytest
 from panoptes.utils.time import CountdownTimer
 from panoptes.utils import error
 
-from huntsman.drp.tests.data import FakeExposureSequence
+from huntsman.drp.utils.testing import FakeExposureSequence
 from huntsman.drp.datatable import ExposureTable
-from huntsman.drp.calibs import MasterCalibMaker
+from huntsman.drp.calib import MasterCalibMaker
+from huntsman.drp.utils.screening import SCREEN_SUCCESS_FLAG
 
 
 @pytest.fixture(scope="function")
@@ -37,6 +38,7 @@ def exposure_table_lite(tmp_path_factory, config_lite, fits_header_translator):
         # Parse the header
         parsed_header = fits_header_translator.parse_header(header)
         parsed_header["filename"] = filename
+        parsed_header[SCREEN_SUCCESS_FLAG] = True
 
         # Insert the parsed header into the DB table
         exposure_table.insert_one(parsed_header)

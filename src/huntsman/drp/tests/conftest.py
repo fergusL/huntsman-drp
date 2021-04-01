@@ -1,14 +1,12 @@
 import pytest
-from astropy.io import fits
 
 from huntsman.drp.core import get_config
-from huntsman.drp.tests.data import FakeExposureSequence
 from huntsman.drp.fitsutil import FitsHeaderTranslator
 from huntsman.drp.datatable import ExposureTable
 from huntsman.drp.refcat import TapReferenceCatalogue
 from huntsman.drp.butler import ButlerRepository, TemporaryButlerRepository
-from huntsman.drp.utils.testing import get_testdata_fits_filenames
-from huntsman.drp.calibs import MasterCalibMaker
+from huntsman.drp.utils import testing
+from huntsman.drp.calib import MasterCalibMaker
 
 # ===========================================================================
 # Config
@@ -16,7 +14,14 @@ from huntsman.drp.calibs import MasterCalibMaker
 
 @pytest.fixture(scope="function")
 def config():
-    return get_config(ignore_local=True, testing=True)
+    config = get_config(ignore_local=True, testing=True)
+
+    # Hack around so files pass screening and quality cuts
+    # TODO: Move to testing config
+    for k in ("bias", "dark", "flat", "science"):
+        config["quality"]["raw"][k] = {}
+
+    return config
 
 # ===========================================================================
 # Reference catalogue
@@ -63,7 +68,7 @@ def exposure_table(tmp_path_factory, config, fits_header_translator):
     """
     # Generate the fake data
     tempdir = tmp_path_factory.mktemp("test_exposure_sequence")
-    expseq = FakeExposureSequence(config=config)
+    expseq = testing.FakeExposureSequence(config=config)
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database
@@ -93,17 +98,7 @@ def exposure_table_real_data(config, fits_header_translator):
     raw data table.
     """
     # Populate the database
-    exposure_table = ExposureTable(config=config, table_name="real_data")
-
-    for filename in get_testdata_fits_filenames(config=config):
-
-        # Parse the header
-        header = fits.getheader(filename)
-        parsed_header = fits_header_translator.parse_header(header)
-        parsed_header["filename"] = filename
-
-        # Insert the parsed header into the DB table
-        exposure_table.insert_one(parsed_header)
+    exposure_table = testing.create_test_exposure_table(config, fits_header_translator, screen=True)
 
     yield exposure_table
 
@@ -117,6 +112,8 @@ def master_calib_table_real_data(exposure_table_real_data, config):
     """ Make a master calib table by reducing real calib data.
     TODO: Store created files so they can be copied in for quicker tests.
     """
+    for k in ("bias", "dark", "flat", "science"):
+        exposure_table_real_data.config["quality"]["raw"][k] = {}
 
     calib_maker = MasterCalibMaker(exposure_table=exposure_table_real_data, config=config)
     calib_maker.logger.info("Creating master calibs for tests.")
@@ -145,7 +142,7 @@ def tempdir_and_exposure_table_with_uningested_files(
     """
     # Generate the fake data
     tempdir = tmp_path_factory.mktemp("dir_with_uningested_files")
-    expseq = FakeExposureSequence(config=config)
+    expseq = testing.FakeExposureSequence(config=config)
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database

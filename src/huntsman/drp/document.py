@@ -1,16 +1,25 @@
 """ Classes to represent dataIds. """
+from collections import abc
 from contextlib import suppress
 
 from huntsman.drp.core import get_config
+from huntsman.drp.utils.mongo import encode_mongo_filter
 
 
-class DataId(object):
+class Document(abc.Mapping):
     """ A dataId behaves like a dictionary but makes it easier to compare between dataIds.
     DataId objects are hashable, whereas dictionaries are not. This allows them to be used in sets.
     """
-    _required_keys = None
+    _required_keys = tuple()
 
     def __init__(self, document, **kwargs):
+        super().__init__()
+
+        if document is None:
+            document = {}
+
+        elif isinstance(document, Document):
+            document = document._document
 
         # Check all the required information is present
         self._validate_document(document)
@@ -30,6 +39,18 @@ class DataId(object):
     def __getitem__(self, key):
         return self._document[key]
 
+    def __setitem__(self, key, item):
+        self._document[key] = item
+
+    def __delitem__(self, item):
+        del self._document[item]
+
+    def __iter__(self):
+        return self._document.__iter__()
+
+    def __len__(self):
+        return len(self._document)
+
     def __str__(self):
         return str({k: self._document[k] for k in self._required_keys})
 
@@ -42,10 +63,13 @@ class DataId(object):
         return self._document.items()
 
     def keys(self):
-        return self.document.keys()
+        return self._document.keys()
 
-    def to_dict(self):
-        return self._document.copy()
+    def update(self, d):
+        self._document.update(d)
+
+    def to_mongo(self):
+        return encode_mongo_filter(self._document)
 
     # Private methods
 
@@ -56,7 +80,7 @@ class DataId(object):
             raise ValueError(f"Document does not contain all required keys: {self._required_keys}.")
 
 
-class RawExposureId(DataId):
+class RawExposureDocument(Document):
 
     _required_keys = ["filename"]
 
@@ -70,13 +94,11 @@ class RawExposureId(DataId):
         super().__init__(document=document, **kwargs)
 
 
-class CalibId(DataId):
+class CalibDocument(Document):
 
-    _required_keys = ("calibDate", "datasetType", "filename")
+    _required_keys = ("calibDate", "datasetType", "filename", "ccd")
 
-    _required_keys_type = {"bias": ("calibDate", "ccd"),
-                           "dark": ("calibDate", "ccd"),
-                           "flat": ("calibDate", "ccd", "filter")}
+    _required_keys_type = {"flat": ("filter",)}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -86,7 +108,9 @@ class CalibId(DataId):
         """
         super()._validate_document(document)
 
-        keys = self._required_keys_type[document["datasetType"]]
+        keys = self._required_keys_type.get(document["datasetType"], None)
+        if not keys:
+            return
 
         if not all([k in document for k in keys]):
             raise ValueError(f"Document does not contain all required keys: {keys}.")

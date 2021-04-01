@@ -10,7 +10,7 @@ from huntsman.drp.datatable import ExposureTable
 from pymongo.errors import ServerSelectionTimeoutError
 
 
-def test_mongodb_wrong_host_name(exposure_table, config):
+def test_mongodb_wrong_host_name(config):
     """Test if an error is raised if the mongodb hostname is incorrect."""
     modified_config = copy.deepcopy(config)
     modified_config["mongodb"]["hostname"] = "nonExistantHostName"
@@ -64,7 +64,7 @@ def test_update(exposure_table):
     # Get a filename to use as an identifier
     filename = data["filename"]
     # Get a key to update
-    key = [_ for _ in data.keys() if _ not in ["filename", "_id"]][0]
+    key = [_ for _ in data.keys() if _ not in ["filename"]][0]
     old_value = data[key]
     new_value = "ThisIsAnewValue"
     assert old_value != new_value  # Let's be sure...
@@ -73,7 +73,6 @@ def test_update(exposure_table):
     exposure_table.update_one(data, update_dict)
     # Check the values match
     data_updated = exposure_table.find()[0]
-    assert data_updated["_id"] == data["_id"]
     assert data_updated[key] == new_value
 
 
@@ -86,3 +85,34 @@ def test_update_file_data_bad_filename(exposure_table):
     update_dict = {"A Key": "A Value", "filename": filename}
     with pytest.raises(RuntimeError):
         exposure_table.update_one(update_dict, update_dict, upsert=False)
+
+
+def test_quality_filter(exposure_table):
+    """
+    """
+    document_filter = {"dataType": "dark"}
+    documents = exposure_table.find(document_filter)
+    n_docs = len(documents)
+
+    for i, d in enumerate(documents):
+        exposure_table.update_one(d, {"TEST_METRIC_1": i})
+    for i, d in enumerate(documents[::-1]):
+        exposure_table.update_one(d, {"TEST_METRIC_2": i})
+
+    exposure_table.config["quality"]["raw"]["dark"] = {"TEST_METRIC_1": {"less_than": 1}}
+    matches = exposure_table.find(document_filter, quality_filter=True)
+    assert len(matches) == 1
+
+    exposure_table.config["quality"]["raw"]["dark"] = {"TEST_METRIC_1": {"less_than": 2}}
+    matches = exposure_table.find(document_filter, quality_filter=True)
+    assert len(matches) == 2
+
+    cond = {"TEST_METRIC_1": {"less_than": 1}, "TEST_METRIC_2": {"greater_than": n_docs - 2}}
+    exposure_table.config["quality"]["raw"]["dark"] = cond
+    matches = exposure_table.find(document_filter, quality_filter=True)
+    assert len(matches) == 1
+
+    cond = {"TEST_METRIC_1": {"less_than": 1}, "TEST_METRIC_2": {"less_than": 1}}
+    exposure_table.config["quality"]["raw"]["dark"] = cond
+    matches = exposure_table.find(document_filter, quality_filter=True)
+    assert len(matches) == 0

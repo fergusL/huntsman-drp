@@ -1,6 +1,3 @@
-"""
-Functions to calculate data quality metrics.
-"""
 import os
 
 from astropy.io import fits
@@ -8,7 +5,7 @@ from astropy.io import fits
 from huntsman.drp.core import get_logger
 
 METRICS = "clipped_stats", "flipped_asymmetry"  # TODO: Refactor!
-QUALITY_FLAG_NAME = "quality_success_flag"
+SCREEN_SUCCESS_FLAG = "screen_success"
 
 
 def screen_success(document):
@@ -24,7 +21,7 @@ def screen_success(document):
         return False
 
 
-def recursively_list_fits_files_in_directory(directory):
+def list_fits_files_recursive(directory):
     """Returns list of all files contained within a top level directory, including files
     within subdirectories.
 
@@ -55,14 +52,14 @@ def metadata_from_fits(file_info, config=None, logger=None, dtype="float32"):
     filename = file_info["filename"]
 
     logger.debug(f"Calculating data quality metrics for {filename}.")
-    result = {"filename": filename, QUALITY_FLAG_NAME: True}
+    result = {"filename": filename, SCREEN_SUCCESS_FLAG: True}
 
     # Load the data from file
     try:
         data = fits.getdata(filename).astype(dtype)
     except Exception as err:  # Data may be missing or corrupt, so catch all errors here
         logger.error(f"Unable to read file {filename}: {err}")
-        result[QUALITY_FLAG_NAME] = False
+        result[SCREEN_SUCCESS_FLAG] = False
 
     # Calculate metrics
     for metric_name in METRICS:
@@ -71,4 +68,4 @@ def metadata_from_fits(file_info, config=None, logger=None, dtype="float32"):
             result.update(globals()[metric_name](data, file_info, config=config, logger=logger))
         except Exception as err:
             logger.error(f"Problem getting '{metric_name}' metric for {filename}: {err}")
-            result[QUALITY_FLAG_NAME] = False
+            result[SCREEN_SUCCESS_FLAG] = False

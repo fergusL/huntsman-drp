@@ -12,9 +12,8 @@ from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.datatable import ExposureTable
 from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header
 from huntsman.drp.utils.library import load_module
-from huntsman.drp.quality.utils import recursively_list_fits_files_in_directory
 from huntsman.drp.quality.metrics.rawexp import RAW_METRICS
-from huntsman.drp.quality.utils import screen_success, QUALITY_FLAG_NAME
+from huntsman.drp.utils.screening import screen_success, SCREEN_SUCCESS_FLAG, list_fits_files_recursive
 
 
 class Screener(HuntsmanBase):
@@ -243,7 +242,7 @@ class Screener(HuntsmanBase):
         #TODO: monitored_directory should be loaded from a config or somthing
         """
         # create a list of fits files within the directory of interest
-        files_in_directory = recursively_list_fits_files_in_directory(self._monitored_directory)
+        files_in_directory = list_fits_files_recursive(self._monitored_directory)
         # list of all entries in data base
         files_in_table = [item['filename'] for item in self._table.find()]
         # determine which files don't have entries in the database and haven't been added to queue
@@ -326,14 +325,14 @@ class Screener(HuntsmanBase):
             hdr = read_fits_header(filename)
         except Exception as e:
             self.logger.error(f"Unable to read file header for {filename}: {e}")
-            result[QUALITY_FLAG_NAME] = False
+            result[SCREEN_SUCCESS_FLAG] = False
             return result
         # get the image data
         try:
             data = fits.getdata(filename)
         except Exception as e:
             self.logger.error(f"Unable to read file {filename}: {e}")
-            result[QUALITY_FLAG_NAME] = False
+            result[SCREEN_SUCCESS_FLAG] = False
             return result
 
         for metric in self._raw_metrics:

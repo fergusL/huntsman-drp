@@ -96,7 +96,8 @@ class CalexpQualityMonitor(HuntsmanBase):
 
     def _refresh_data_ids(self):
         """ Update the set of data IDs that require processing. """
-        data_ids = self._exposure_table.get_data_ids({"dataType": "science"}, screen=True)
+        data_ids = self._exposure_table.find({"dataType": "science"}, screen=True,
+                                             quality_filter=True)
         self._data_ids.update([d for d in data_ids if self._requires_processing(d)])
 
     def _async_process_files(self):
@@ -104,7 +105,6 @@ class CalexpQualityMonitor(HuntsmanBase):
         self.logger.debug("Starting processing thread.")
 
         while True:
-
             if self._stop:
                 self.logger.debug("Stopping calexp thread.")
                 break
@@ -121,6 +121,8 @@ class CalexpQualityMonitor(HuntsmanBase):
             data_id = self._data_ids.pop()
             self.logger.info(f"Processing data ID: {data_id}")
             self._process_file(data_id)
+
+            time.sleep(1)
 
     def _process_file(self, data_id):
         """ Create a calibrated exposure (calexp) for the given data ID and store the metadata.

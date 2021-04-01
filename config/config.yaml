@@ -91,12 +91,13 @@ refcat:
     flags:
       equal: 0
 
-screening:
-  flat:
-    flip_asymm_h:
-      less_than: 100
-    flip_asymm_v:
-      less_than: 60
-    well_fullfrac:
-      greater_than: 0.13
-      less_than: 0.19
+quality:
+  raw:
+    flat:
+      flip_asymm_h:
+        less_than: 100
+      flip_asymm_v:
+        less_than: 60
+      well_fullfrac:
+        greater_than: 0.13
+        less_than: 0.19

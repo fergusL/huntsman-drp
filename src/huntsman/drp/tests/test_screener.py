@@ -1,7 +1,7 @@
 import os
 import time
 
-from huntsman.drp.quality.screening import Screener
+from huntsman.drp.screener import Screener
 
 
 def test_screener_ingest(tempdir_and_exposure_table_with_uningested_files, config):
