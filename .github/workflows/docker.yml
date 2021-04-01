@@ -3,9 +3,6 @@ on:
   push:
     branches:
     - develop
-    paths:
-    - docker/Dockerfile
-    - docker/screener/Dockerfile
 jobs:
   build:
     runs-on: ubuntu-latest
