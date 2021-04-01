@@ -284,8 +284,8 @@ class Screener(HuntsmanBase):
         hdr = read_fits_header(filename)
         parsed_header = FitsHeaderTranslator().parse_header(hdr)
         parsed_header["filename"] = filename
+
         # Create new document in table using parsed header
-        self.logger.info("Adding quality metadata to database.")
         self._table.insert_one(parsed_header)
 
     def _screen_file(self, filename):
@@ -299,11 +299,9 @@ class Screener(HuntsmanBase):
         metrics = self._get_raw_metrics(filename)
 
         # Make the document and update the DB
-        # TODO: safe to assume there won't be duplicate entries in the datatable?
-        # self.logger.info(f'Looking for filename: {filename}')
-        # self.logger.info(f'files in table are:\n\n { self._table.find() } \n\n')
         metadata = self._table.find_one({'filename': filename})
         to_update = {"quality": {"rawexp": metrics, "screen_success": True}}
+
         self._table.update_one(metadata, to_update=to_update)
 
     def _get_raw_metrics(self, filename):

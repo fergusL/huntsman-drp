@@ -3,7 +3,7 @@ from astropy.wcs import WCS
 from panoptes.utils.images.fits import get_solve_field
 from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header
 
-RAW_METRICS = ("has_wcs", "clipped_stats", "flipped_asymmetry")
+RAW_METRICS = ("get_wcs", "clipped_stats", "flipped_asymmetry")
 
 
 def get_wcs(filename, timeout=60, downsample=4, radius=5, *args):
