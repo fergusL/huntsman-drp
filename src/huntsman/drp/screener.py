@@ -38,7 +38,7 @@ class Screener(HuntsmanBase):
         self._raw_metrics = deepcopy(RAW_METRICS)
 
         if exposure_table is None:
-            self._table = ExposureTable(config=self.config, logger=self.logger)
+            exposure_table = ExposureTable(config=self.config, logger=self.logger)
         self._table = exposure_table
 
         self._sleep_interval = sleep_interval
