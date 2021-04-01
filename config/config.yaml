@@ -93,6 +93,8 @@ refcat:
 
 quality:
   raw:
+    science:
+       has_wcs: true
     flat:
       flip_asymm_h:
         less_than: 100
