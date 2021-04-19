@@ -179,9 +179,6 @@ class MasterCalibMaker(HuntsmanBase):
         if not query_result:
             return True
 
-        if len(query_result) > 1:
-            raise RuntimeError(f"calib_id {calib_id} matched with multiple documents.")
-
         # If there are new files for this calib, return True
         if any([r["date_modified"] >= query_result["date_modified"] for r in raw_data_ids]):
             return True
