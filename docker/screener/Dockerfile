@@ -4,7 +4,7 @@ FROM ${base_image}
 ENV PATH="/root/miniconda3/bin:${PATH}"
 ENV HUNTSMAN_LOG_DIR=/home/huntsman-logs
 
-COPY --chown="${USER}:${USER}" . /home/huntsman-drp
+COPY . /home/huntsman-drp
 
 USER root
 # update apt-get
