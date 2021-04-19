@@ -283,6 +283,35 @@ class RawExposureCollection(Collection):
 
         return df
 
+    def get_matching_raw_calibs(self, calib_document, calib_date):
+        """ Return matching set of calib IDs for a given data_id and calib_date.
+        Args:
+            calib_document (CalibDocument): The calib document to match with.
+            calib_date (object): An object that can be interpreted as a date.
+        Returns:
+            list of RawExposureDocument: The matching raw calibs.
+        """
+        # Make the document filter
+        dataset_type = calib_document["datasetType"]
+        matching_keys = self.config["calibs"]["matching_columns"][dataset_type]
+        doc_filter = {k: calib_document[k] for k in matching_keys}
+
+        # Add dataType to doc filter
+        doc_filter["dataType"] = dataset_type
+
+        # Add valid date range to query
+        validity = timedelta(days=self.config["calibs"]["validity"])
+        calib_date = parse_date(calib_date)
+        date_start = calib_date - validity
+        date_end = calib_date + validity
+
+        # Do the query
+        documents = self.find(doc_filter, date_start=date_start, date_end=date_end)
+        self.logger.debug(f"Found {len(documents)} matching raw calib documents for"
+                          f" {calib_document} at {calib_date}.")
+
+        return documents
+
     # Private methods
 
     def _get_quality_filter(self):

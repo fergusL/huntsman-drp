@@ -75,40 +75,51 @@ class MasterCalibMaker(HuntsmanBase):
             calib_date (object): The calib date.
         """
         # Get metadata for all raw calibs that are valid for this date
-        raw_data_ids = self._find_raw_calibs(calib_date=calib_date)
+        raw_docs = self._find_raw_calibs(calib_date=calib_date)
 
         # Get a list of all unique calib IDs from the raw calibs
-        calib_ids_all = self._get_unique_calib_ids(calib_date=calib_date, documents=raw_data_ids)
+        calib_ids_all = self._get_unique_calib_docs(calib_date=calib_date, documents=raw_docs)
         self.logger.info(f"Found {len(calib_ids_all)} unique calib IDs for"
                          f" calib_date={calib_date}.")
 
         # Figure out which calib IDs need processing
-        calibs_to_process = [c for c in calib_ids_all if self._should_process(c, raw_data_ids)]
-        self.logger.info(f"{len(calibs_to_process)} calib IDs require processing for"
+        calib_docs_to_process = [c for c in calib_ids_all if self._should_process(c, raw_docs)]
+        self.logger.info(f"{len(calib_docs_to_process)} calib IDs require processing for"
                          f" calib_date={calib_date}.")
 
-        if not calibs_to_process:
+        if not calib_docs_to_process:
             self.logger.warning(f"No calibIds require processing for calibDate={calib_date}.")
             return
 
+        # Identify raw exposures to process based on calib IDs
+        raw_docs_to_process = []
+        for calib_doc in calib_docs_to_process:
+            docs = self._exposure_table.get_matching_raw_calibs(calib_doc, calib_date)
+            if docs:
+                raw_docs_to_process.extend(docs)
+            else:
+                self.logger.warning(f"No raw calibs found for {calib_doc}.")
+        self.logger.info(f"Found {len(raw_docs_to_process)} raw calibs that require processing"
+                         f" for {calib_date}.")
+
         # Identify existing calibs that need ingesting
-        calibs_to_ingest = [c for c in calib_ids_all if c not in calibs_to_process]
+        calibs_to_ingest = [c for c in calib_ids_all if c not in calib_docs_to_process]
 
         # Figure out if we can skip any of the calibs
         datasetTypes_to_skip = []
 
-        if not any([_["datasetType"] == "bias" for _ in calibs_to_process]):
+        if not any([_["datasetType"] == "bias" for _ in calib_docs_to_process]):
             datasetTypes_to_skip.append("bias")
 
             # Only skip darks if we are also skipping biases
-            if not any([_["datasetType"] == "dark" for _ in calibs_to_process]):
+            if not any([_["datasetType"] == "dark" for _ in calib_docs_to_process]):
                 datasetTypes_to_skip.append("dark")
 
         # Process data in a temporary butler repo
         with TemporaryButlerRepository(calib_table=self._calib_table) as br:
 
             # Ingest raw exposures
-            br.ingest_raw_data([_["filename"] for _ in raw_data_ids])
+            br.ingest_raw_data([_["filename"] for _ in raw_docs_to_process])
 
             # Ingest any existing master calibs
             for calib_type in self._calib_types:
@@ -125,7 +136,7 @@ class MasterCalibMaker(HuntsmanBase):
                                         " Skipping.")
                     return
 
-            # Make master calibs without raising errors
+            # Make master calibs without raising errors (implicit error handling)
             br.make_master_calibs(calib_date=calib_date, datasetTypes_to_skip=datasetTypes_to_skip,
                                   validity=self._validity.days, procs=self._nproc)
 
@@ -210,7 +221,7 @@ class MasterCalibMaker(HuntsmanBase):
 
         return docs
 
-    def _get_unique_calib_ids(self, calib_date, documents):
+    def _get_unique_calib_docs(self, calib_date, documents):
         """ Get all possible CalibDocuments from a set of documents.
         Args:
             calib_date (object): The calib date.
