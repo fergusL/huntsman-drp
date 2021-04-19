@@ -5,7 +5,7 @@ from panoptes.utils.time import CountdownTimer
 from panoptes.utils import error
 
 from huntsman.drp.utils.testing import FakeExposureSequence
-from huntsman.drp.datatable import ExposureTable
+from huntsman.drp.collection import RawExposureCollection
 from huntsman.drp.calib import MasterCalibMaker
 from huntsman.drp.utils.screening import SCREEN_SUCCESS_FLAG
 
@@ -32,7 +32,8 @@ def exposure_table_lite(tmp_path_factory, config_lite, fits_header_translator):
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database
-    exposure_table = ExposureTable(config=config_lite, table_name="fake_data_lite")
+    exposure_table = RawExposureCollection(config=config_lite, table_name="fake_data_lite")
+
     for filename, header in expseq.header_dict.items():
 
         # Parse the header

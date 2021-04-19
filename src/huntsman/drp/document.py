@@ -12,7 +12,7 @@ class Document(abc.Mapping):
     """
     _required_keys = tuple()
 
-    def __init__(self, document, **kwargs):
+    def __init__(self, document, validate=True, copy=False, **kwargs):
         super().__init__()
 
         if document is None:
@@ -21,10 +21,14 @@ class Document(abc.Mapping):
         elif isinstance(document, Document):
             document = document._document
 
-        # Check all the required information is present
-        self._validate_document(document)
+        if copy:
+            document = document.copy()
 
-        self._document = document.copy()
+        # Check all the required information is present
+        if validate and self._required_keys:
+            self._validate_document(document)
+
+        self._document = document
 
     # Special methods
 
@@ -69,7 +73,13 @@ class Document(abc.Mapping):
         self._document.update(d)
 
     def to_mongo(self):
+        """ Get the full mongo filter for the document """
         return encode_mongo_filter(self._document)
+
+    def get_mongo_id(self):
+        """ Get the unique mongo ID for the document """
+        doc = {k: self[k] for k in self._required_keys}
+        return encode_mongo_filter(doc)
 
     # Private methods
 

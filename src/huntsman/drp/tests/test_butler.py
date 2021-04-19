@@ -1,7 +1,7 @@
 import os
 
 from huntsman.drp.utils.date import current_date
-from huntsman.drp.datatable import MasterCalibTable
+from huntsman.drp.collection import MasterCalibCollection
 from huntsman.drp.utils.testing import create_test_bulter_repository
 
 
@@ -86,13 +86,13 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         br.ingest_raw_data(filenames)
 
         # Make the calibs
-        br.make_master_calibs(calib_date=current_date(), rerun="test_rerun", ingest=True)
+        br.make_master_calibs(calib_date=current_date(), rerun="test_rerun")
 
         # Archive the calibs
         br.archive_master_calibs()
 
         # Check the biases in the butler dir
-        metadata_bias = br.get_calib_metadata(dataset_type="bias")
+        metadata_bias = br.get_calib_metadata(datasetType="bias")
         assert len(metadata_bias) == n_bias
         ccds = set()
         for md in metadata_bias:
@@ -100,7 +100,7 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         assert len(ccds) == test_config["n_cameras"]
 
         # Check the darks in the butler dir
-        metadata_dark = br.get_calib_metadata(dataset_type="dark")
+        metadata_dark = br.get_calib_metadata(datasetType="dark")
         assert len(metadata_dark) == n_dark
         ccds = set()
         for md in metadata_dark:
@@ -108,7 +108,7 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         assert len(ccds) == test_config["n_cameras"]
 
         # Check the flats in the butler dir
-        metadata_flat = br.get_calib_metadata(dataset_type="flat")
+        metadata_flat = br.get_calib_metadata(datasetType="flat")
         assert len(metadata_flat) == n_flat
         filters = set()
         ccds = set()
@@ -119,7 +119,7 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         assert len(ccds) == test_config["n_cameras"]
 
         # Check the calibs in the archive
-        master_calib_table = MasterCalibTable(config=config)
+        master_calib_table = MasterCalibCollection(config=config)
         calib_metadata = master_calib_table.find()
         filenames = [c["filename"] for c in calib_metadata]
         datasettypes = [c["datasetType"] for c in calib_metadata]

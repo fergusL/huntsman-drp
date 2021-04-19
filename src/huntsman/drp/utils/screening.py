@@ -16,7 +16,7 @@ def screen_success(document):
         bool: True if success, else False.
     """
     try:
-        return bool(document["quality"]["screen_success"])
+        return bool(document[SCREEN_SUCCESS_FLAG])
     except KeyError:
         return False
 

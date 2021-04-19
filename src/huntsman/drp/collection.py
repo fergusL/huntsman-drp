@@ -15,14 +15,14 @@ from huntsman.drp.utils.mongo import encode_mongo_filter, mongo_logical_or, mong
 from huntsman.drp.utils.screening import SCREEN_SUCCESS_FLAG
 
 
-class DataTable(HuntsmanBase):
+class Collection(HuntsmanBase):
     """ This class is used to interface with the mongodb. It is responsible for performing queries
     and inserting/updating/deleting documents, as well as validating new documents.
     """
     _unique_columns = "filename",  # Required to identify a unique document
 
     def __init__(self, table_name, **kwargs):
-        HuntsmanBase.__init__(self, **kwargs)
+        super().__init__(**kwargs)
 
         self._date_key = self.config["mongodb"]["date_key"]
         self._table_name = table_name
@@ -103,16 +103,21 @@ class DataTable(HuntsmanBase):
         if key is not None:
             return [d[key] for d in documents]
 
-        return [self._data_id_type(d, config=self.config) for d in documents]
+        # Skip validation to speed up - inserted documents should already be valid
+        return [self._data_id_type(d, validate=False, config=self.config) for d in documents]
 
     def find_one(self, *args, **kwargs):
-        """ Find a single matching document, making sure only one document is matched.
+        """ Find a single matching document. If multiple matches, raise a RuntimeError.
+        Args:
+            *args, **kwargs: Parsed to self.find.
+        Returns:
+            Document or None: If there is a match return the document, else None.
         """
         documents = self.find(*args, **kwargs)
+        if not documents:
+            return None
         if len(documents) > 1:
             raise RuntimeError("Matched with more than one document.")
-        elif len(documents) == 0:
-            raise RuntimeError("No matching documents.")
         return documents[0]
 
     def insert_one(self, document, overwrite=False):
@@ -123,24 +128,21 @@ class DataTable(HuntsmanBase):
         """
         # Check the required columns exist in the new document
         document = self._data_id_type(document)
-
-        # Add date records
-        document["date_created"] = current_date()
-        document["date_modified"] = current_date()
-
-        # Prepare document for insertion
-        mongo_doc = document.to_mongo()
+        document_id = document.get_mongo_id()
 
         # Check there is at most one match in the table
-        count = self._table.count_documents(mongo_doc)
-        if count == 1:
+        if self.find_one(document_filter=document_id) is not None:
             if overwrite:
-                self.delete(mongo_doc)
+                self.update_one(document_id, to_update=document)
+                return
             else:
-                raise RuntimeError(f"Found existing document for {mongo_doc} in {self}."
+                raise RuntimeError(f"Document {document} already exists in {self}."
                                    " Pass overwrite=True to overwrite.")
-        elif count != 0:
-            raise RuntimeError(f"Multiple matches found for document in {self}: {mongo_doc}.")
+
+        # Prepare document to insert
+        document["date_created"] = current_date()
+        document["date_modified"] = current_date()
+        mongo_doc = document.to_mongo()
 
         # Insert the document
         self.logger.debug(f"Inserting new document into {self}: {document}.")
@@ -169,9 +171,11 @@ class DataTable(HuntsmanBase):
         count = self._table.count_documents(mongo_filter)
         if count > 1:
             raise RuntimeError(f"Multiple matches found for document in {self}: {document_filter}.")
+
         elif (count == 0) and not upsert:
             raise RuntimeError(f"No matches found for document {document_filter} in {self}. Use"
                                " upsert=True to upsert.")
+
         self._table.update_one(document_filter, {'$set': mongo_update}, upsert=upsert)
 
     def delete_one(self, document_filter):
@@ -180,7 +184,7 @@ class DataTable(HuntsmanBase):
             document_filter (dict, optional): A dictionary containing key, value pairs used to
                 identify the document to delete, by default None
         """
-        document_filter = Document(document_filter)
+        document_filter = Document(document_filter, validate=False)
         mongo_filter = document_filter.to_mongo()
 
         count = self._table.count_documents(mongo_filter)
@@ -197,7 +201,8 @@ class DataTable(HuntsmanBase):
             documents (list): List of dictionaries that specify documents to be inserted in the
                 table.
         """
-        return [self.insert_one(d, **kwargs) for d in documents]
+        for d in documents:
+            self.insert_one(d, **kwargs)
 
     def delete_many(self, documents, **kwargs):
         """ Delete one document from the table.
@@ -205,7 +210,8 @@ class DataTable(HuntsmanBase):
             documents (list): List of dictionaries that specify documents to be deleted from the
                 table.
         """
-        return [self.delete_one(d, **kwargs) for d in documents]
+        for d in documents:
+            self.delete_one(d, **kwargs)
 
     def find_latest(self, days=0, hours=0, seconds=0, **kwargs):
         """ Convenience function to query the latest files in the db.
@@ -252,7 +258,7 @@ class DataTable(HuntsmanBase):
         raise NotImplementedError
 
 
-class ExposureTable(DataTable):
+class RawExposureCollection(Collection):
     """ Table to store metadata for Huntsman exposures. """
 
     _data_id_type = RawExposureDocument
@@ -289,15 +295,19 @@ class ExposureTable(DataTable):
         filters = []
         for data_type, document_filter in quality_config.items():
 
-            if document_filter:
+            if document_filter is not None:
                 # Create a new document filter for this data type
                 document_filter["dataType"] = data_type
                 filters.append(encode_mongo_filter(document_filter))
 
+        # Allow data types that do not have any quality requirements in config
+        data_types = list(quality_config.keys())
+        filters.append({"dataType": {"$nin": data_types}})
+
         return mongo_logical_or(filters)
 
 
-class MasterCalibTable(DataTable):
+class MasterCalibCollection(Collection):
     """ Table to store metadata for master calibs. """
 
     _data_id_type = CalibDocument

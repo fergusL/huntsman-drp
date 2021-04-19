@@ -11,3 +11,4 @@ setup display_firefly
 # This seems to be the only way of getting the logs to work properly
 userid=$(id -u ${USER})
 sudo chown ${userid}:${userid} ${HUNTSMAN_LOG_DIR}
+sudo chown ${userid}:${userid} ${HUNTSMAN_ARCHIVE}

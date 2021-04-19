@@ -2,6 +2,7 @@ import os
 import time
 
 from huntsman.drp.screener import Screener
+from huntsman.drp.utils.screening import SCREEN_SUCCESS_FLAG, screen_success
 
 
 def test_screener_ingest(tempdir_and_exposure_table_with_uningested_files, config):
@@ -42,10 +43,12 @@ def test_screener_ingest(tempdir_and_exposure_table_with_uningested_files, confi
             raise RuntimeError("Screener has stopped running.")
 
         for md in exposure_table.find():
-            assert "rawexp" in md["quality"].keys()
+            assert SCREEN_SUCCESS_FLAG in md
+            assert "quality" in md
 
-        for metric_value in md["quality"]["rawexp"].values():
+        for metric_value in md["quality"].values():
             assert metric_value is not None
+
     finally:
         screener.stop()
         assert not screener.is_running
@@ -55,5 +58,5 @@ def test_screener_ingest(tempdir_and_exposure_table_with_uningested_files, confi
         assert screener.status['screened'] == n_to_screen
         # check that exposure_table entries have been screen successfully
         for md in exposure_table.find():
-            assert md['quality']['screen_success']
+            assert screen_success(md)
         # TODO: implement a check that all the expected metric keys are present in table

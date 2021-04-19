@@ -3,8 +3,8 @@ from threading import Thread
 
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.library import load_module
-from huntsman.drp.datatable import ExposureTable, MasterCalibTable
-from huntsman.drp.butler import TemporaryButlerRepository
+from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
+from huntsman.drp.lsst.butler import TemporaryButlerRepository
 from huntsman.drp.quality.metrics.calexp import METRICS
 
 
@@ -30,10 +30,10 @@ class CalexpQualityMonitor(HuntsmanBase):
         Args:
             sleep (float): Time to sleep if there are no new files that require processing. Default
                 300s.
-            exposure_table (DataTable, optional): The exposure table. If not given, will create
-                a new ExposureTable instance.
-            calib_table (DataTable, optional): The master calib table. If not given, will create
-                a new MasterCalibTable instance.
+            exposure_table (Collection, optional): The exposure table. If not given, will create
+                a new RawExposureCollection instance.
+            calib_table (Collection, optional): The master calib table. If not given, will create
+                a new MasterCalibCollection instance.
             refcat_filename (str, optional): The reference catalogue filename. If not provided,
                 will create a new refcat.
         """
@@ -47,11 +47,11 @@ class CalexpQualityMonitor(HuntsmanBase):
         self._n_failed = 0
 
         if exposure_table is None:
-            exposure_table = ExposureTable(config=self.config, logger=self.logger)
+            exposure_table = RawExposureCollection(config=self.config, logger=self.logger)
         self._exposure_table = exposure_table
 
         if calib_table is None:
-            calib_table = MasterCalibTable(config=self.config, logger=self.logger)
+            calib_table = MasterCalibCollection(config=self.config, logger=self.logger)
         self._calib_table = calib_table
 
         self._calexp_thread = Thread(target=self._async_process_files)
@@ -146,7 +146,7 @@ class CalexpQualityMonitor(HuntsmanBase):
             # Ingest the corresponding master calibs
             for calib_type, calib_id in calibs.items():
                 calib_filename = calib_id["filename"]
-                br.ingest_master_calibs(calib_type=calib_type, filenames=[calib_filename])
+                br.ingest_master_calibs(datasetType=calib_type, filenames=[calib_filename])
 
             # Make and ingest the reference catalogue
             if self._refcat_filename is None:
@@ -163,10 +163,10 @@ class CalexpQualityMonitor(HuntsmanBase):
                 return
 
             required_keys = br.get_keys("raw")
-            calexps, data_ids = br.get_calexps(extra_keys=required_keys)
+            calexps, dataIds = br.get_calexps(extra_keys=required_keys)
 
             # Evaluate metrics and insert into the database
-            for calexp, calexp_id in zip(calexps, data_ids):
+            for calexp, calexp_id in zip(calexps, dataIds):
 
                 metrics = get_quality_metrics(calexp)
 

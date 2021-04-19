@@ -6,6 +6,12 @@ from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import parse_date
 
 
+def read_fits_data(filename, dtype="float32", **kwargs):
+    """ Read fits image into numpy array.
+    """
+    return fits.getdata(filename, **kwargs).astype(dtype)
+
+
 def read_fits_header(filename, ext="auto"):
     """ Read the FITS header for a given filename.
     Args:

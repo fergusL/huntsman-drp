@@ -62,10 +62,10 @@ mongodb:
   date_key: "date"
 
 calibs:
-  types:
-    - flat
+  types:  # Order might be important...
     - bias
     - dark
+    - flat
   validity: 30
   matching_columns:  # These columns are for matching raw calibs with raw science frames
     flat:
@@ -94,12 +94,14 @@ refcat:
 quality:
   raw:
     science:
-       has_wcs: true
+      quality:
+        has_wcs: true
     flat:
-      flip_asymm_h:
-        less_than: 100
-      flip_asymm_v:
-        less_than: 60
-      well_fullfrac:
-        greater_than: 0.13
-        less_than: 0.19
+      quality:
+        flip_asymm_h:
+          less_than: 100
+        flip_asymm_v:
+          less_than: 60
+        well_fullfrac:
+          greater_than: 0.13
+          less_than: 0.19

@@ -6,13 +6,12 @@ from copy import deepcopy
 from contextlib import suppress
 from threading import Thread
 from astropy.time import Time
-from astropy.io import fits
 
 from huntsman.drp.base import HuntsmanBase
-from huntsman.drp.datatable import ExposureTable
-from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header
+from huntsman.drp.collection import RawExposureCollection
+from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header, read_fits_data
 from huntsman.drp.utils.library import load_module
-from huntsman.drp.quality.metrics.rawexp import RAW_METRICS
+from huntsman.drp.quality.metrics.raw import RAW_METRICS
 from huntsman.drp.utils.screening import screen_success, SCREEN_SUCCESS_FLAG, list_fits_files_recursive
 
 
@@ -38,7 +37,7 @@ class Screener(HuntsmanBase):
         self._raw_metrics = deepcopy(RAW_METRICS)
 
         if exposure_table is None:
-            exposure_table = ExposureTable(config=self.config, logger=self.logger)
+            exposure_table = RawExposureCollection(config=self.config, logger=self.logger)
         self._table = exposure_table
 
         self._sleep_interval = sleep_interval
@@ -290,51 +289,36 @@ class Screener(HuntsmanBase):
 
     def _screen_file(self, filename):
         """Private method that calls the various screening metrics and collates the results.
-
-        Parameters
-        ----------
-        filename : str
-            Filename of image to be screened.
+        Args:
+            filename (str): Filename of image to be screened.
         """
-        metrics = self._get_raw_metrics(filename)
+        try:
+            metrics = self._get_raw_metrics(filename)
+            to_update = {SCREEN_SUCCESS_FLAG: True, "quality": metrics}
 
-        # Make the document and update the DB
+        except Exception as err:
+            self.logger.error(f"Problem getting metrics for {filename}: {err!r}")
+            to_update = {SCREEN_SUCCESS_FLAG: False}
+
+        # Update the DB
         metadata = self._table.find_one({'filename': filename})
-        to_update = {"quality": {"rawexp": metrics, "screen_success": True}}
-
         self._table.update_one(metadata, to_update=to_update)
 
     def _get_raw_metrics(self, filename):
         """ Evaluate metrics for a raw/unprocessed file.
-
-        Parameters
-        ----------
-        filename : str
-            filename of image to be measured.
-
-        Returns
-        -------
-        dict
-            Dictionary containing the metric values.
+        Args:
+            filename (str): The filename of the FITS image to be processed.
+        Returns:
+            dict: Dictionary containing the metric values.
         """
         result = {}
-        # read the header
-        try:
-            hdr = read_fits_header(filename)
-        except Exception as e:
-            self.logger.error(f"Unable to read file header for {filename}: {e}")
-            result[SCREEN_SUCCESS_FLAG] = False
-            return result
-        # get the image data
-        try:
-            data = fits.getdata(filename)
-        except Exception as e:
-            self.logger.error(f"Unable to read file {filename}: {e}")
-            result[SCREEN_SUCCESS_FLAG] = False
-            return result
+
+        # Read the FITS file
+        header = read_fits_header(filename)
+        data = read_fits_data(filename)  # Returns float array
 
         for metric in self._raw_metrics:
-            func = load_module(
-                f"huntsman.drp.quality.metrics.rawexp.{metric}")
-            result[metric] = func(filename, data, hdr)
+            func = load_module(f"huntsman.drp.quality.metrics.raw.{metric}")
+            result.update(func(filename, data=data, header=header))
+
         return result

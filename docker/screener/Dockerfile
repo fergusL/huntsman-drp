@@ -4,6 +4,8 @@ FROM ${base_image}
 ENV PATH="/root/miniconda3/bin:${PATH}"
 ENV HUNTSMAN_LOG_DIR=/home/huntsman-logs
 
+COPY --chown="${USER}:${USER}" . /home/huntsman-drp
+
 USER root
 # update apt-get
 RUN apt-get update -y && \
@@ -22,10 +24,10 @@ RUN apt-get update -y && \
     # Downgrade coverage version to avoid pytest issues
     pip uninstall -y coverage && \
     pip install coverage==4.5.4 && \
-    cd /home/ && git clone https://github.com/AstroHuntsman/huntsman-drp.git && \
-    cd /home/huntsman-drp && python setup.py develop && \
-      # Make directories for logs and set permissions
-    mkdir -p "${HUNTSMAN_LOG_DIR}"
+    # Make huntsman directories
+    mkdir -p "${HUNTSMAN_LOG_DIR}" && \
+    # Install local huntsman-drp into the image
+    cd /home/huntsman-drp && python setup.py develop
 
 WORKDIR /home
 ADD docker/screener/bash-config.sh .

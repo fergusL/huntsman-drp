@@ -1,13 +1,14 @@
 """ Continually produce, update and archive master calibs. """
-import os
 import time
 import datetime
 from threading import Thread
 
+from panoptes.utils.time import CountdownTimer
+
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import date_to_ymd, parse_date
-from huntsman.drp.datatable import ExposureTable, MasterCalibTable
-from huntsman.drp.butler import TemporaryButlerRepository
+from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
+from huntsman.drp.lsst.butler import TemporaryButlerRepository
 from huntsman.drp.document import CalibDocument
 from huntsman.drp.utils.calib import get_calib_filename
 
@@ -16,21 +17,22 @@ class MasterCalibMaker(HuntsmanBase):
 
     _date_key = "dateObs"
 
-    def __init__(self, exposure_table=None, calib_table=None, **kwargs):
+    def __init__(self, exposure_table=None, calib_table=None, nproc=1, **kwargs):
         super().__init__(**kwargs)
 
         self._calib_types = self.config["calibs"]["types"]
+        self._nproc = int(nproc)
 
         validity = self.config["calibs"]["validity"]
         self._validity = datetime.timedelta(days=validity)  # TODO: Validity based on calib type
 
         # Create datatable objects
         if exposure_table is None:
-            exposure_table = ExposureTable(config=self.config, logger=self.logger)
+            exposure_table = RawExposureCollection(config=self.config, logger=self.logger)
         self._exposure_table = exposure_table
 
         if calib_table is None:
-            calib_table = MasterCalibTable(config=self.config, logger=self.logger)
+            calib_table = MasterCalibCollection(config=self.config, logger=self.logger)
         self._calib_table = calib_table
 
         # Create threads
@@ -76,51 +78,64 @@ class MasterCalibMaker(HuntsmanBase):
         raw_data_ids = self._find_raw_calibs(calib_date=calib_date)
 
         # Get a list of all unique calib IDs from the raw calibs
-        calib_ids = self._get_unique_calib_ids(calib_date=calib_date, documents=raw_data_ids)
-
-        self.logger.info(f"Found {len(calib_ids)} unique calib IDs for calib_date={calib_date}.")
-
-        # Figure out which calib IDs need processing
-        calib_ids_to_process = []
-        for calib_id in calib_ids:
-            if self._should_process(calib_id, raw_data_ids):
-                calib_ids_to_process.append(calib_id)
-
-        self.logger.info(f"{len(calib_ids_to_process)} calib IDs require processing for"
+        calib_ids_all = self._get_unique_calib_ids(calib_date=calib_date, documents=raw_data_ids)
+        self.logger.info(f"Found {len(calib_ids_all)} unique calib IDs for"
                          f" calib_date={calib_date}.")
 
-        if len(calib_ids_to_process) == 0:
+        # Figure out which calib IDs need processing
+        calibs_to_process = [c for c in calib_ids_all if self._should_process(c, raw_data_ids)]
+        self.logger.info(f"{len(calibs_to_process)} calib IDs require processing for"
+                         f" calib_date={calib_date}.")
+
+        if not calibs_to_process:
+            self.logger.warning(f"No calibIds require processing for calibDate={calib_date}.")
             return
 
-        calibs_existing = [c for c in calib_ids if os.path.isfile(c["filename"])]
-        calibs_ingest = [c for c in calibs_existing if c not in calib_ids_to_process]
+        # Identify existing calibs that need ingesting
+        calibs_to_ingest = [c for c in calib_ids_all if c not in calibs_to_process]
 
         # Figure out if we can skip any of the calibs
-        skip_bias = not any([_["datasetType"] == "bias" for _ in calib_ids])
-        skip_dark = skip_bias and not any([_["datasetType"] == "dark" for _ in calib_ids])
+        datasetTypes_to_skip = []
+
+        if not any([_["datasetType"] == "bias" for _ in calibs_to_process]):
+            datasetTypes_to_skip.append("bias")
+
+            # Only skip darks if we are also skipping biases
+            if not any([_["datasetType"] == "dark" for _ in calibs_to_process]):
+                datasetTypes_to_skip.append("dark")
 
         # Process data in a temporary butler repo
-        with TemporaryButlerRepository() as br:
+        with TemporaryButlerRepository(calib_table=self._calib_table) as br:
 
             # Ingest raw exposures
             br.ingest_raw_data([_["filename"] for _ in raw_data_ids])
 
-            # Ingest existing master calibs
+            # Ingest any existing master calibs
             for calib_type in self._calib_types:
-                filenames = [c["filename"] for c in calibs_ingest if c["calibType"] == calib_type]
+
+                filenames = [
+                    c["filename"] for c in calibs_to_ingest if c["calibType"] == calib_type]
                 if filenames:
                     br.ingest_master_calibs(calib_type, filenames=filenames,
                                             validity=self._validity)
 
-            # Make and archive the master calibs
+                # Check if there is sufficient data to proceed
+                elif calib_type in datasetTypes_to_skip:
+                    self.logger.warning(f"No {calib_type} frames available for {calib_date}."
+                                        " Skipping.")
+                    return
+
+            # Make master calibs without raising errors
+            br.make_master_calibs(calib_date=calib_date, datasetTypes_to_skip=datasetTypes_to_skip,
+                                  validity=self._validity.days, procs=self._nproc)
+
+            # Archive the master calibs
             try:
-                self.logger.info(f"Making master calibs for calib_date={calib_date}.")
-                br.make_master_calibs(skip_bias=skip_bias, skip_dark=skip_dark,
-                                      calib_date=calib_date)
+                self.logger.info(f"Archiving master calibs for calib_date={calib_date}.")
                 br.archive_master_calibs()
 
             except Exception as err:
-                self.logger.warning(f"Unable to create master calib for calib_date={calib_date}:"
+                self.logger.warning(f"Unable to archive master calibs for calib_date={calib_date}:"
                                     f" {err!r}")
 
     # Private methods
@@ -144,7 +159,11 @@ class MasterCalibMaker(HuntsmanBase):
                 self.process_date(calib_date)
 
             self.logger.info(f"Finished processing calib dates. Sleeping for {sleep} seconds.")
-            time.sleep(sleep)
+            timer = CountdownTimer(duration=sleep)
+            while not timer.expired():
+                if self._stop_threads:
+                    return
+                time.sleep(1)
 
     def _should_process(self, calib_id, raw_data_ids):
         """ Check if the given calib_id should be processed based on existing raw data.
@@ -154,7 +173,7 @@ class MasterCalibMaker(HuntsmanBase):
         Returns:
             bool: True if the calib ID requires processing, else False.
         """
-        query_result = self._calib_table.find(document_filter=calib_id)
+        query_result = self._calib_table.find_one(document_filter=calib_id)
 
         # If the calib does not already exist, return True
         if not query_result:
@@ -170,20 +189,37 @@ class MasterCalibMaker(HuntsmanBase):
         return False
 
     def _find_raw_calibs(self, calib_date):
-        """
+        """ Find all valid raw calibs in the raw exposure collection given a calib date.
+        Args:
+            calib_date (object): The calib date.
+        Returns:
+            list of RawExposureDocument: The documents.
         """
         parsed_date = parse_date(calib_date)
         date_start = parsed_date - self._validity
         date_end = parsed_date + self._validity
 
-        result = self._exposure_table.find(date_start=date_start, date_end=date_end, screen=True,
-                                           quality_filter=True)
-        self.logger.info(f"Found {len(result)} raw calibs for calib_date={calib_date}.")
+        docs = []
+        for calib_type in self._calib_types:
 
-        return result
+            docs_of_type = self._exposure_table.find(
+                {"dataType": calib_type}, date_start=date_start, date_end=date_end, screen=True,
+                quality_filter=True)
+
+            self.logger.info(f"Found {len(docs_of_type)} raw {calib_type} calibs for"
+                             f" calib_date={calib_date}.")
+
+            docs.extend(docs_of_type)
+
+        return docs
 
     def _get_unique_calib_ids(self, calib_date, documents):
-        """
+        """ Get all possible CalibDocuments from a set of documents.
+        Args:
+            calib_date (object): The calib date.
+            documents (list): The list of documents.
+        Returns:
+            list of CalibDocument: The calb documents.
         """
         calib_date = date_to_ymd(calib_date)
         calib_types = self.config["calibs"]["types"]

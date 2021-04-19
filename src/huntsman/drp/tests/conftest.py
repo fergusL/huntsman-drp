@@ -2,9 +2,9 @@ import pytest
 
 from huntsman.drp.core import get_config
 from huntsman.drp.fitsutil import FitsHeaderTranslator
-from huntsman.drp.datatable import ExposureTable
+from huntsman.drp.collection import RawExposureCollection
 from huntsman.drp.refcat import TapReferenceCatalogue
-from huntsman.drp.butler import ButlerRepository, TemporaryButlerRepository
+from huntsman.drp.lsst.butler import ButlerRepository, TemporaryButlerRepository
 from huntsman.drp.utils import testing
 from huntsman.drp.calib import MasterCalibMaker
 
@@ -19,7 +19,8 @@ def config():
     # Hack around so files pass screening and quality cuts
     # TODO: Move to testing config
     for k in ("bias", "dark", "flat", "science"):
-        config["quality"]["raw"][k] = {}
+        if k in config["quality"]["raw"]:
+            del config["quality"]["raw"][k]
 
     return config
 
@@ -72,7 +73,7 @@ def exposure_table(tmp_path_factory, config, fits_header_translator):
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database
-    exposure_table = ExposureTable(config=config, table_name="fake_data")
+    exposure_table = RawExposureCollection(config=config, table_name="fake_data")
     for filename, header in expseq.header_dict.items():
 
         # Parse the header
@@ -112,9 +113,6 @@ def master_calib_table_real_data(exposure_table_real_data, config):
     """ Make a master calib table by reducing real calib data.
     TODO: Store created files so they can be copied in for quicker tests.
     """
-    for k in ("bias", "dark", "flat", "science"):
-        exposure_table_real_data.config["quality"]["raw"][k] = {}
-
     calib_maker = MasterCalibMaker(exposure_table=exposure_table_real_data, config=config)
     calib_maker.logger.info("Creating master calibs for tests.")
 
@@ -146,7 +144,7 @@ def tempdir_and_exposure_table_with_uningested_files(
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database
-    exposure_table = ExposureTable(config=config, table_name="fake_data")
+    exposure_table = RawExposureCollection(config=config, table_name="fake_data")
     n_stop = len(expseq.header_dict) * 0.7 // 1  # ingest ~70% of the files
     n = 0
     for filename, header in expseq.header_dict.items():
