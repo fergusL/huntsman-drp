@@ -24,7 +24,6 @@ class Collection(HuntsmanBase):
     def __init__(self, table_name, **kwargs):
         super().__init__(**kwargs)
 
-        self._date_key = self.config["mongodb"]["date_key"]
         self._table_name = table_name
 
         # Initialise the DB
@@ -344,43 +343,41 @@ class MasterCalibCollection(Collection):
     def __init__(self, table_name="master_calib", **kwargs):
         super().__init__(table_name=table_name, **kwargs)
 
-        self._calib_types = self.config["calibs"]["types"]
-        self._matching_keys = self.config["calibs"]["matching_columns"]
-
-        # Calib validity TODO: datasetType dependence?
-        self._validity = timedelta(days=self.config["calibs"]["validity"])
-
-    def get_matching_calibs(self, data_id, calib_date):
-        """ Return matching set of calib IDs for a given data_id and calib_date.
+    def get_matching_calibs(self, document):
+        """ Return best matching set of calibs for a given document.
         Args:
-            data_id (object): An object that can be interpreted as a data ID.
-            calib_date (object): An object that can be interpreted as a date.
+            document (RawExposureDocument): The document to match with.
         Returns:
-            dict: A dict of datasetType: filename.
+            dict: A dict of datasetType: CalibDocument.
         Raises:
-            FileNotFoundError: If there is no matching calib.
+            FileNotFoundError: If there is no matching calib of any type.
+            TODO: Make new MissingCalibError and raise instead.
         """
-        calib_date = parse_date(calib_date)
+        self.logger.debug(f"Finding best matching calibs for {document}.")
 
-        result = {}
-        for calib_type in self._calib_types:
+        validity = timedelta(days=self.config["calibs"]["validity"])
+        matching_keys = self.config["calibs"]["matching_columns"]
 
-            err_msg = (f"No matching master {calib_type} for dataId={data_id},"
-                       f" calibDate={calib_date}.")
+        # Specify valid date range
+        date = parse_date(document["dateObs"])
+        date_start = date - validity
+        date_end = date + validity
 
-            doc_filter = {k: data_id[k] for k in self._matching_keys[calib_type]}
+        best_calibs = {}
+        for calib_type in self.config["calibs"]["types"]:
+
+            doc_filter = {k: document[k] for k in matching_keys[calib_type]}
             doc_filter["datasetType"] = calib_type
 
-            calib_ids = self.find(doc_filter)
-            dates = [parse_date(_["calibDate"]) for _ in calib_ids]
+            # Query the calib table
+            calib_docs = self.find(doc_filter, date_start=date_start, date_end=date_end)
+            if len(calib_docs) == 0:
+                raise FileNotFoundError(f"No matching master {calib_type} for {document}.")
 
-            if len(dates) == 0:
-                raise FileNotFoundError(err_msg)
+            dates = [parse_date(_["calibDate"]) for _ in calib_docs]
+            timediffs = [abs(date - d) for d in dates]
 
-            timediffs = [abs(calib_date - d) for d in dates]
-            if min(timediffs) > self._validity:
-                raise FileNotFoundError(err_msg)
+            # Choose the one with the nearest date
+            best_calibs[calib_type] = calib_docs[np.argmin(timediffs)]
 
-            result[calib_type] = calib_ids[np.argmin(timediffs)]
-
-        return result
+        return best_calibs

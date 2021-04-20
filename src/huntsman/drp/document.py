@@ -3,6 +3,7 @@ from collections import abc
 from contextlib import suppress
 
 from huntsman.drp.core import get_config
+from huntsman.drp.utils.date import parse_date
 from huntsman.drp.utils.mongo import encode_mongo_filter
 
 
@@ -103,6 +104,9 @@ class RawExposureDocument(Document):
 
         super().__init__(document=document, **kwargs)
 
+        if "date" not in self.keys():
+            self["date"] = parse_date(self["dateObs"])
+
 
 class CalibDocument(Document):
 
@@ -112,6 +116,9 @@ class CalibDocument(Document):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        if "date" not in self.keys():
+            self["date"] = parse_date(self["calibDate"])
 
     def _validate_document(self, document):
         """

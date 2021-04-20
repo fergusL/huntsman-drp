@@ -42,7 +42,7 @@ class CalexpQualityMonitor(HuntsmanBase):
         self._refcat_filename = refcat_filename
 
         self._stop = False
-        self._data_ids = set()
+        self._documents_to_process = set()
         self._n_processed = 0
         self._n_failed = 0
 
@@ -55,6 +55,7 @@ class CalexpQualityMonitor(HuntsmanBase):
         self._calib_table = calib_table
 
         self._calexp_thread = Thread(target=self._async_process_files)
+        self._queue_thread = Thread(target=self._async_queue_documents)
 
     @property
     def is_running(self):
@@ -66,7 +67,7 @@ class CalexpQualityMonitor(HuntsmanBase):
 
     @property
     def n_queued(self):
-        return len(self._data_ids)
+        return len(self._documents_to_process)
 
     @property
     def status(self):
@@ -84,24 +85,43 @@ class CalexpQualityMonitor(HuntsmanBase):
         """ Start the calexp montioring thread. """
         self.logger.info("Starting calexp monitor thread.")
         self._stop = False
+        self._queue_thread.start()
         self._calexp_thread.start()
 
     def stop(self):
         """ Stop the calexp monitoring thread.
         Note that this will block until any ongoing processing has finished.
         """
-        self.logger.info("Stopping calexp monitor thread.")
+        self.logger.info("Stopping calexp queue thread.")
         self._stop = True
+        self._queue_thread.join()
         self._calexp_thread.join()
 
-    def _refresh_data_ids(self):
+    def _refresh_documents(self):
         """ Update the set of data IDs that require processing. """
-        data_ids = self._exposure_table.find({"dataType": "science"}, screen=True,
-                                             quality_filter=True)
-        self._data_ids.update([d for d in data_ids if self._requires_processing(d)])
+        documents = self._exposure_table.find({"dataType": "science"}, screen=True,
+                                              quality_filter=True)
+        self._documents_to_process = [d for d in documents if self._requires_processing(d)]
+
+    def _async_queue_documents(self):
+        """ Continually update the list of documents that require processing. """
+        self.logger.debug("Starting queue thread.")
+
+        while True:
+            self.logger.info(f"Status: {self.status}")
+
+            if self._stop:
+                self.logger.debug("Stopping queue thread.")
+                break
+
+            self.logger.debug("Refreshing documents.")
+            self._refresh_documents()
+
+            self.logger.debug(f"Queue thread sleeping for {self._sleep}s.")
+            time.sleep(self._sleep)
 
     def _async_process_files(self):
-        """ Continually check for and process files that require processing. """
+        """ Continually process documents that require processing. """
         self.logger.debug("Starting processing thread.")
 
         while True:
@@ -109,43 +129,39 @@ class CalexpQualityMonitor(HuntsmanBase):
                 self.logger.debug("Stopping calexp thread.")
                 break
 
-            self._refresh_data_ids()
-            self.logger.info(f"Status: {self.status}")
-
             # Sleep if no new files
             if self.n_queued == 0:
                 self.logger.info(f"No files to process. Sleeping for {self._sleep}s.")
                 time.sleep(self._sleep)
                 continue
 
-            data_id = self._data_ids.pop()
-            self.logger.info(f"Processing data ID: {data_id}")
-            self._process_file(data_id)
+            document = self._documents_to_process.pop()
+            self.logger.info(f"Processing document: {document}")
+            try:
+                self._process_file(document)
+                self._n_processed += 1
+            except Exception as err:
+                self.logger.warning(f"Unable to create calexp for {document}: {err!r}")
+                self._n_failed += 1
 
             time.sleep(1)
 
-    def _process_file(self, data_id):
+    def _process_file(self, document):
         """ Create a calibrated exposure (calexp) for the given data ID and store the metadata.
         Args:
-            data_id (DataId): The data ID.
+            document (RawExposureDocument): The document to process.
         """
-        # Get matching master calibs. If no matching calib, log warning and return.
-        calib_date = data_id["dateObs"]
-        try:
-            calibs = self._calib_table.get_matching_calibs(data_id, calib_date=calib_date)
-        except FileNotFoundError as err:
-            self.logger.warning(f"{err!r}")
-            self._n_failed += 1
-            return
+        # Get matching master calibs
+        calib_docs = self._calib_table.get_matching_calibs(document)
 
         with TemporaryButlerRepository() as br:
 
             # Ingest raw science exposure into the bulter repository
-            br.ingest_raw_data([data_id["filename"]])
+            br.ingest_raw_data([document["filename"]])
 
             # Ingest the corresponding master calibs
-            for calib_type, calib_id in calibs.items():
-                calib_filename = calib_id["filename"]
+            for calib_type, calib_doc in calib_docs.items():
+                calib_filename = calib_doc["filename"]
                 br.ingest_master_calibs(datasetType=calib_type, filenames=[calib_filename])
 
             # Make and ingest the reference catalogue
@@ -155,13 +171,7 @@ class CalexpQualityMonitor(HuntsmanBase):
                 br.ingest_reference_catalogue([self._refcat_filename])
 
             # Make the calexps, also getting the dataIds to match with their raw frames
-            try:
-                br.make_calexps()
-            except Exception as err:
-                self.logger.warning(f"Unable to create calexp for {data_id}: {err!r}")
-                self._n_failed += 1
-                return
-
+            br.make_calexps()
             required_keys = br.get_keys("raw")
             calexps, dataIds = br.get_calexps(extra_keys=required_keys)
 
@@ -174,8 +184,6 @@ class CalexpQualityMonitor(HuntsmanBase):
                 document = {k: calexp_id[k] for k in required_keys}
                 to_update = {"quality": {"calexp": metrics}}
                 self._exposure_table.update_one(document, to_update=to_update)
-
-        self._n_processed += 1
 
     def _requires_processing(self, file_info):
         """ Check if a file requires processing.

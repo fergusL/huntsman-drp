@@ -59,7 +59,6 @@ mongodb:
   hostname: "localhost"
   port: 27017
   db_name: "huntsman"
-  date_key: "date"
 
 calibs:
   types:  # Order might be important...

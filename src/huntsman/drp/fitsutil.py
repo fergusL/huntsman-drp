@@ -141,8 +141,7 @@ class FitsHeaderTranslator(FitsHeaderTranslatorBase):
             result[column] = getattr(self, f"translate_{column}")(header)
 
         # Explicitly parse the date in specialised format with different key
-        date_key = self.config["mongodb"]["date_key"]
-        result[date_key] = self._translate_date(header)
+        result[self._date_key] = self._translate_date(header)
 
         return result
 
