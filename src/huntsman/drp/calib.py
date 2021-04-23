@@ -17,11 +17,23 @@ class MasterCalibMaker(HuntsmanBase):
 
     _date_key = "dateObs"
 
-    def __init__(self, exposure_table=None, calib_table=None, nproc=1, **kwargs):
+    def __init__(self, exposure_table=None, calib_table=None, nproc=None, **kwargs):
+        """
+        Args:
+            nproc (int): The number of processes to use. If None (default), will check the config
+                item `calib-maker.nproc` with a default value of 1.
+        """
         super().__init__(**kwargs)
 
         self._calib_types = self.config["calibs"]["types"]
+
+        calib_maker_config = self.config.get("calib-maker", {})
+
+        # Set the number of processes
+        if nproc is None:
+            nproc = calib_maker_config.get("nproc", 1)
         self._nproc = int(nproc)
+        self.logger.debug(f"Master calib maker using {nproc} processes.")
 
         validity = self.config["calibs"]["validity"]
         self._validity = datetime.timedelta(days=validity)  # TODO: Validity based on calib type

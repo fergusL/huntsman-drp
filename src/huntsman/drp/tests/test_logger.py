@@ -1,8 +1,7 @@
 import os
 import pytest
-import logging
 
-from huntsman.drp.core import get_logger
+from huntsman.drp.core import get_logger, get_logdir, FILE_LOG_LEVELS
 
 
 @pytest.fixture(scope="module")
@@ -10,35 +9,18 @@ def logger():
     return get_logger()
 
 
-def test_logger_debug(logger):
+def test_logger(logger):
     """
     """
-    message = "hello from debug"
-    logger.debug(message)
-    count = 0
-    for handler in logger.handlers:
-        if isinstance(handler, logging.FileHandler):
-            if handler.level <= logging.DEBUG:
-                assert os.path.isfile(handler.baseFilename)
-                with open(handler.baseFilename, "r") as f:
-                    lines = f.readlines()
-                    assert message in lines[-1]
-                count += 1
-    assert count == 1
+    for level in FILE_LOG_LEVELS:
 
+        # Log a message at this level
+        message = f"hello from {level}"
+        getattr(logger, level.lower())(message)
 
-def test_logger_info(logger):
-    """
-    """
-    message = "hello from info"
-    logger.info(message)
-    count = 0
-    for handler in logger.handlers:
-        if isinstance(handler, logging.FileHandler):
-            if handler.level <= logging.INFO:
-                assert os.path.isfile(handler.baseFilename)
-                with open(handler.baseFilename, "r") as f:
-                    lines = f.readlines()
-                    assert message in lines[-1]
-                count += 1
-    assert count == 2
+        filename = os.path.join(get_logdir(), f"hunts-drp-{level.lower()}.log")
+        assert os.path.isfile(filename)
+
+        with open(filename, "r") as f:
+            lines = f.readlines()
+            assert message in lines[-1]

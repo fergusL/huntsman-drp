@@ -145,6 +145,15 @@ class FitsHeaderTranslator(FitsHeaderTranslatorBase):
 
         return result
 
+    def read_and_parse(self, filename, **kwargs):
+        """ Convenience function to read a FITS header from file and parse it.
+        Args:
+            filename (str): The filename.
+        Returns:
+            dict: The parsed header.
+        """
+        return self.parse_header(read_fits_header(filename, **kwargs))
+
     def _translate_date(self, header):
         """ Translate the date from the FITS header to a format recognised by pymongo. """
         date_key = self.config["fits_header"]["date_key"]

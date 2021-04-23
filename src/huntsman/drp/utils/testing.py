@@ -10,7 +10,7 @@ from huntsman.drp.lsst.butler import ButlerRepository
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import parse_date
 from huntsman.drp.collection import RawExposureCollection
-from huntsman.drp.utils.screening import SCREEN_SUCCESS_FLAG
+from huntsman.drp.utils.ingest import METRIC_SUCCESS_FLAG
 
 EXPTIME_BIAS = 1E-32  # Minimum exposure time for ZWO cameras is > 0
 
@@ -75,7 +75,7 @@ def create_test_exposure_table(config, fits_header_translator, screen=True):
     raw data table.
     """
     # Populate the database
-    exposure_table = RawExposureCollection(config=config, table_name="real_data")
+    exposure_table = RawExposureCollection(config=config, collection_name="real_data")
 
     for filename in get_testdata_fits_filenames(config=config):
 
@@ -85,7 +85,7 @@ def create_test_exposure_table(config, fits_header_translator, screen=True):
         parsed_header["filename"] = filename
 
         if screen:
-            parsed_header[SCREEN_SUCCESS_FLAG] = True
+            parsed_header[METRIC_SUCCESS_FLAG] = True
 
         # Insert the parsed header into the DB table
         exposure_table.insert_one(parsed_header)

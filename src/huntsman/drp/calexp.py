@@ -5,7 +5,7 @@ from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.library import load_module
 from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
 from huntsman.drp.lsst.butler import TemporaryButlerRepository
-from huntsman.drp.quality.metrics.calexp import METRICS
+from huntsman.drp.metrics.calexp import METRICS
 
 
 def get_quality_metrics(calexp):
@@ -14,7 +14,7 @@ def get_quality_metrics(calexp):
     """
     result = {}
     for metric in METRICS:
-        func = load_module(f"huntsman.drp.quality.metrics.calexp.{metric}")
+        func = load_module(f"huntsman.drp.metrics.calexp.{metric}")
         result[metric] = func(calexp)
     return result
 
@@ -25,7 +25,7 @@ class CalexpQualityMonitor(HuntsmanBase):
     """
 
     def __init__(self, sleep=300, exposure_table=None, calib_table=None, refcat_filename=None,
-                 *args, **kwargs):
+                 nproc=None, *args, **kwargs):
         """
         Args:
             sleep (float): Time to sleep if there are no new files that require processing. Default
@@ -36,6 +36,8 @@ class CalexpQualityMonitor(HuntsmanBase):
                 a new MasterCalibCollection instance.
             refcat_filename (str, optional): The reference catalogue filename. If not provided,
                 will create a new refcat.
+            nproc (int): The number of processes to use. If None (default), will check the config
+                item `calexp-monitor.nproc` with a default value of 1.
         """
         super().__init__(*args, **kwargs)
         self._sleep = sleep
@@ -46,6 +48,15 @@ class CalexpQualityMonitor(HuntsmanBase):
         self._n_processed = 0
         self._n_failed = 0
 
+        calexp_monitor_config = self.config.get("calexp-monitor", {})
+
+        # Set the number of processes
+        # This is a dummy for now
+        if nproc is None:
+            nproc = calexp_monitor_config.get("nproc", 1)
+        self._nproc = int(nproc)
+        self.logger.debug(f"Calexp monitor using {nproc} processes.")
+
         if exposure_table is None:
             exposure_table = RawExposureCollection(config=self.config, logger=self.logger)
         self._exposure_table = exposure_table
@@ -54,7 +65,7 @@ class CalexpQualityMonitor(HuntsmanBase):
             calib_table = MasterCalibCollection(config=self.config, logger=self.logger)
         self._calib_table = calib_table
 
-        self._calexp_thread = Thread(target=self._async_process_files)
+        self._process_thread = Thread(target=self._async_process_files)
         self._queue_thread = Thread(target=self._async_queue_documents)
 
     @property
@@ -78,7 +89,7 @@ class CalexpQualityMonitor(HuntsmanBase):
         status = {"processed": self._n_processed,
                   "failed": self._n_failed,
                   "queued": self.n_queued,
-                  "running": self._calexp_thread.is_alive()}
+                  "running": self._process_thread.is_alive()}
         return status
 
     def start(self):
@@ -86,7 +97,7 @@ class CalexpQualityMonitor(HuntsmanBase):
         self.logger.info("Starting calexp monitor thread.")
         self._stop = False
         self._queue_thread.start()
-        self._calexp_thread.start()
+        self._process_thread.start()
 
     def stop(self):
         """ Stop the calexp monitoring thread.
@@ -95,7 +106,7 @@ class CalexpQualityMonitor(HuntsmanBase):
         self.logger.info("Stopping calexp queue thread.")
         self._stop = True
         self._queue_thread.join()
-        self._calexp_thread.join()
+        self._process_thread.join()
 
     def _refresh_documents(self):
         """ Update the set of data IDs that require processing. """
@@ -108,8 +119,6 @@ class CalexpQualityMonitor(HuntsmanBase):
         self.logger.debug("Starting queue thread.")
 
         while True:
-            self.logger.info(f"Status: {self.status}")
-
             if self._stop:
                 self.logger.debug("Stopping queue thread.")
                 break
@@ -121,12 +130,17 @@ class CalexpQualityMonitor(HuntsmanBase):
             time.sleep(self._sleep)
 
     def _async_process_files(self):
-        """ Continually process documents that require processing. """
+        """ Continually process documents that require processing.
+        TODO: Use multiprocessing.
+        """
+        time.sleep(10)  # Wait for initial documents to be queued
         self.logger.debug("Starting processing thread.")
 
         while True:
+            self.logger.info(f"Status: {self.status}")
+
             if self._stop:
-                self.logger.debug("Stopping calexp thread.")
+                self.logger.debug("Stopping processing thread.")
                 break
 
             # Sleep if no new files
@@ -143,8 +157,6 @@ class CalexpQualityMonitor(HuntsmanBase):
             except Exception as err:
                 self.logger.warning(f"Unable to create calexp for {document}: {err!r}")
                 self._n_failed += 1
-
-            time.sleep(1)
 
     def _process_file(self, document):
         """ Create a calibrated exposure (calexp) for the given data ID and store the metadata.

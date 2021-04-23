@@ -1,10 +1,10 @@
 import os
-import sys
-import logging
-from logging import handlers
+from loguru import logger as LOGGER
 import yaml
 from contextlib import suppress
 from collections import abc
+
+FILE_LOG_LEVELS = ("DEBUG", "INFO", "WARNING")
 
 
 def _load_yaml(filename):
@@ -65,13 +65,8 @@ def get_config(config_dir=None, ignore_local=False, parse=True, testing=False):
     return config
 
 
-def get_logger(backupCount=5, maxBytes=256000000):
-    """ Get the huntsman-drp logger.
-    Args:
-        backupCount (int, optional): The maximum number of old log files to keep. Default 5.
-        maxBytes (int, optional): The maximum size of each log file. Default 256MB.
-    Returns:
-        logging.logger: The logger object.
+def get_logdir():
+    """ Get the huntsman-drp log directory.
     """
     # Get the logs directory
     try:
@@ -82,46 +77,32 @@ def get_logger(backupCount=5, maxBytes=256000000):
         except KeyError:
             raise KeyError("Neither HUNTSMAN_LOG_DIR or HUNTSMAN_DRP environment variables set."
                            " Unable to determine log directory.")
+    return logdir
+
+
+def get_logger(rotation="500 MB"):
+    """ Get the huntsman-drp logger.
+    """
+    # Get the logs directory
+    logdir = get_logdir()
 
     # Make sure log directory exists
     os.makedirs(logdir, exist_ok=True)
 
-    # Create a logger object
-    logger = logging.getLogger("huntsman-drp")
+    # Add files to log
+    # Note: Use enqueue=True to make it work with multiprocessing
+    for level in FILE_LOG_LEVELS:
+        filename = os.path.join(logdir, f"hunts-drp-{level.lower()}.log")
 
-    if not logger.handlers:  # If the logger is not initialised already
-        logger.setLevel(logging.DEBUG)
+        # Make sure the file has not already been added
+        # TODO: Check if there is a cleaner way of doing this!
+        duplicate = False
+        for handler in LOGGER._core.handlers.values():
+            with suppress(AttributeError):
+                if filename == handler._sink._file_path:
+                    duplicate = True
+                    break
+        if not duplicate:
+            LOGGER.add(filename, level=level, rotation=rotation, enqueue=True)
 
-        # Create log formatter
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-
-        # Create an info-level handler that will be printed in the terminal
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(logging.INFO)
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-        # Create an info-level handler that will be written to a log file
-        filename_info = os.path.join(logdir, "huntsman-drp-info.log")
-        handler = handlers.RotatingFileHandler(filename_info, backupCount=backupCount,
-                                               maxBytes=maxBytes)
-        handler.setLevel(logging.INFO)
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-        # Create a debug-level handler that will be written to a log file
-        filename_debug = os.path.join(logdir, "huntsman-drp-debug.log")
-        handler = handlers.RotatingFileHandler(filename_debug, backupCount=backupCount,
-                                               maxBytes=maxBytes)
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-        # Create a warning-level handler that will be written to a log file
-        filename_warning = os.path.join(logdir, "huntsman-drp-warning.log")
-        handler = handlers.RotatingFileHandler(filename_warning)
-        handler.setLevel(logging.WARNING)
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-    return logger
+    return LOGGER

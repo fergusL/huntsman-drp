@@ -11,7 +11,7 @@ class Document(abc.Mapping):
     """ A dataId behaves like a dictionary but makes it easier to compare between dataIds.
     DataId objects are hashable, whereas dictionaries are not. This allows them to be used in sets.
     """
-    _required_keys = tuple()
+    _required_keys = set()
 
     def __init__(self, document, validate=True, copy=False, **kwargs):
         super().__init__()
@@ -88,19 +88,20 @@ class Document(abc.Mapping):
         """
         """
         if not all([k in document for k in self._required_keys]):
-            raise ValueError(f"Document does not contain all required keys: {self._required_keys}.")
+            missing_keys = [k for k in self._required_keys if k not in document.keys()]
+            raise ValueError(f"Document missing required keys: {missing_keys}.")
 
 
 class RawExposureDocument(Document):
 
-    _required_keys = ["filename"]
+    _required_keys = set(["filename"])
 
     def __init__(self, document, config=None, **kwargs):
 
         if config is None:
             config = get_config()  # Do not store the config as we will be making many DataIds
 
-        self._required_keys.extend(config["fits_header"]["required_columns"])
+        self._required_keys.update(config["fits_header"]["required_columns"])
 
         super().__init__(document=document, **kwargs)
 
@@ -110,7 +111,7 @@ class RawExposureDocument(Document):
 
 class CalibDocument(Document):
 
-    _required_keys = ("calibDate", "datasetType", "filename", "ccd")
+    _required_keys = set(["calibDate", "datasetType", "filename", "ccd"])
 
     _required_keys_type = {"flat": ("filter",)}
 
