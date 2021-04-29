@@ -1,4 +1,5 @@
 import os
+import gc
 import shutil
 from contextlib import suppress
 from tempfile import TemporaryDirectory
@@ -10,7 +11,7 @@ from lsst.daf.persistence.policy import Policy
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.lsst import tasks
 from huntsman.drp.collection import MasterCalibCollection
-from huntsman.drp.refcat import TapReferenceCatalogue
+from huntsman.drp.refcat import RefcatClient
 from huntsman.drp.utils.date import date_to_ymd, current_date_ymd
 import huntsman.drp.lsst.utils.butler as utils
 from huntsman.drp.fitsutil import read_fits_header
@@ -25,7 +26,7 @@ class ButlerRepository(HuntsmanBase):
     _ra_key = "RA-MNT"
     _dec_key = "DEC-MNT"  # TODO: Move to config
 
-    def __init__(self, directory, calib_dir=None, initialise=True, calib_table=None,
+    def __init__(self, directory, calib_dir=None, initialise=True, calib_collection=None,
                  min_dataIds_per_calib=1, max_dataIds_per_calib=50, **kwargs):
         """
         Args:
@@ -34,7 +35,7 @@ class ButlerRepository(HuntsmanBase):
                 will create a new CALIB directory under the butler repository root.
             initialise (bool, optional): If True (default), initialise the butler reposity
                 with required files.
-            calib_table (MasterCalibCollection, optional): The master calib collection.
+            calib_collection (MasterCalibCollection, optional): The master calib collection.
             min_dataIds_per_calib (int, optional): Limit the minimum number of dataIds that can
                 contribute to a single calib to this number. Default 1.
             max_dataIds_per_calib (int, optional): Limit the maximum number of dataIds that can
@@ -59,10 +60,11 @@ class ButlerRepository(HuntsmanBase):
             self._refcat_filename = None
         else:
             self._refcat_filename = os.path.join(self.butler_dir, "refcat_raw", "refcat_raw.csv")
+        self._refcat_client = None
 
-        if calib_table is None:
-            calib_table = MasterCalibCollection(config=self.config, logger=self.logger)
-        self._calib_table = calib_table
+        if calib_collection is None:
+            calib_collection = MasterCalibCollection(config=self.config, logger=self.logger)
+        self._calib_collection = calib_collection
 
         # Load the policy file
         self._policy = Policy(self._policy_filename)
@@ -140,7 +142,7 @@ class ButlerRepository(HuntsmanBase):
         Returns:
             str: The filename.
         """
-        return self.get(datasetType + "_filename", data_id=data_id, **kwargs)
+        return self.get(datasetType + "_filename", data_id=data_id, **kwargs)[0]
 
     def get_metadata(self, datasetType, keys, data_id=None, **kwargs):
         """ Get metadata for a dataset.
@@ -352,31 +354,39 @@ class ButlerRepository(HuntsmanBase):
 
     def make_reference_catalogue(self, ingest=True, **kwargs):
         """ Make the reference catalogue for the ingested science frames.
+        TODO: Move this out of the butler repository class.
         Args:
             ingest (bool, optional): If True (default), ingest refcat into butler repo.
         """
         butler = self.get_butler(**kwargs)
 
-        # Get the filenames of ingested images
-        data_ids, filenames = utils.get_files_of_type("exposures.raw", self.butler_dir,
-                                                      policy=self._policy)
-        # Use the FITS header sto retrieve the RA/Dec info
         ra_list = []
         dec_list = []
-        for data_id, filename in zip(data_ids, filenames):
 
-            data_type = butler.queryMetadata("raw", ["dataType"], dataId=data_id)[0]
+        # Get the filenames of ingested images
+        dataIds = self.get_dataIds("raw")
 
-            if data_type == "science":  # Only select science files
-                header = read_fits_header(filename, ext="all")  # Use all as .fz extension is lost
-                ra_list.append(header[self._ra_key])
-                dec_list.append(header[self._dec_key])
+        if len(dataIds) == 0:
+            raise RuntimeError("No science images to make reference catalogue with.")
 
-        self.logger.debug(f"Creating reference catalogue for {len(ra_list)} science frames.")
+        for dataId in dataIds:
+
+            filename = self.get_filename("raw", dataId)
+            dataType = butler.queryMetadata("raw", ["dataType"], dataId=dataId)[0]
+
+            # Only select science files
+            if dataType != "science":
+                continue
+
+            header = read_fits_header(filename, ext="all")  # Use all as .fz extension is lost
+            ra_list.append(header[self._ra_key])
+            dec_list.append(header[self._dec_key])
+
+        self.logger.debug(f"Creating reference catalogue for {len(ra_list)} science frame(s).")
 
         # Make the reference catalogue
-        tap = TapReferenceCatalogue(config=self.config, logger=self.logger)
-        tap.make_reference_catalogue(ra_list, dec_list, filename=self._refcat_filename)
+        self._refcat_client.make_reference_catalogue(ra_list, dec_list,
+                                                     filename=self._refcat_filename)
 
         # Ingest into the repository
         if ingest:
@@ -475,17 +485,23 @@ class ButlerRepository(HuntsmanBase):
                 shutil.copy(filename, archived_filename)
 
                 # Insert the metadata into the calib database
-                self._calib_table.insert_one(metadata, overwrite=True)
+                self._calib_collection.insert_one(metadata, overwrite=True)
 
     # Private methods
 
     def _initialise(self):
         """Initialise a new butler repository."""
+        # Create the refcat client
+        # This is a thread-safe implementation of the TapReferenceCatalogue
+        self._refcat_client = RefcatClient(config=self.config, logger=self.logger)
+
         # Add the mapper file to each subdirectory, making directory if necessary
         for subdir in ["", "CALIB"]:
             dir = os.path.join(self.butler_dir, subdir)
+
             with suppress(FileExistsError):
                 os.mkdir(dir)
+
             filename_mapper = os.path.join(dir, "_mapper")
             with open(filename_mapper, "w") as f:
                 f.write(self._mapper)
@@ -563,12 +579,19 @@ class ButlerRepository(HuntsmanBase):
 class TemporaryButlerRepository(ButlerRepository):
     """ Create a new Butler repository in a temporary directory."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, directory_prefix=None, **kwargs):
+        """
+        Args:
+            directory_prefix (str): String to prefix the name of the temporary directory.
+                Default: None.
+            **kwargs: Parsed to ButlerRepository init function.
+        """
+        self._directory_prefix = directory_prefix
         super().__init__(directory=None, initialise=False, **kwargs)
 
     def __enter__(self):
         """Create temporary directory and initialise as a butler repository."""
-        self._tempdir = TemporaryDirectory()
+        self._tempdir = TemporaryDirectory(prefix=self._directory_prefix)
         self.butler_dir = self._tempdir.name
         self._refcat_filename = os.path.join(self.butler_dir, "refcat_raw", "refcat_raw.csv")
         self._initialise()
@@ -580,6 +603,10 @@ class TemporaryButlerRepository(ButlerRepository):
         self._tempdir.cleanup()
         self.butler_dir = None
         self._refcat_filename = None
+
+        # This *shouldn't* be necessary but seems like it might be...
+        self._refcat_client._proxy._pyroRelease()
+        gc.collect()
 
     @property
     def calib_dir(self):

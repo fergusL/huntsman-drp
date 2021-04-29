@@ -21,34 +21,38 @@ MASTER_CALIB_SCRIPTS = {"bias": "constructBias.py",
                         "flat": "constructFlat.py"}
 
 
-def run_command(cmd, logger=None):
+def run_command(cmd, logger=None, timeout=None):
     """Run an LSST command line task.
     Args:
         cmd (str): The LSST commandline task to run in a subprocess.
-    Returns:
-        subprocess.CompletedProcess: The result of the command.
+        logger (logger, optinal): The logger.
+        timeout (float, optional): The subprocess timeout in seconds. If None (default), no timeout
+            is applied.
     Raises:
-        subprocess.CalledProcessError
+        subprocess.CalledProcessError: If the subprocess return code is non-zero.
+        subprocess.TimeoutExpired: If the subprocess timeout is reached.
     """
     if logger is None:
         logger = get_logger()
     logger.debug(f"Running LSST command in subprocess: {cmd}")
 
-    result = subprocess.run(cmd, shell=True, check=False, capture_output=True)
+    with subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT) as proc:
 
-    # Log the LSST output
-    for pipe in (result.stdout, result.stderr):  # TODO: Override LSST logger?
-        for line in pipe.decode().split("\n"):
-            if line:
-                logger.debug(line)
+        # Log subprocess output in real time
+        with proc.stdout as pipe:
+            for line in iter(pipe.readline, b''):
+                logger.debug(line.decode().strip("\n"))
+
+        # Wait for subprocess to finish
+        returncode = proc.wait(timeout=timeout)
 
     # Raise an error if the command failed
-    # This does not always seem to work
-    if result.returncode != 0:
-        raise subprocess.CalledProcessError(cmd=cmd, returncode=result.returncode,
-                                            output=result.stdout, stderr=result.stderr)
+    # This does not always seem to work as some LSST scripts always seem to exit 0
+    if returncode != 0:
+        raise subprocess.CalledProcessError(cmd=cmd, returncode=returncode)
 
-    return result
+    return
 
 
 def ingest_raw_data(filenames, butler_dir, mode="link", ignore_ingested=True):
@@ -96,21 +100,13 @@ def ingest_reference_catalogue(butler_dir, filenames, output_directory=None):
 
 
 def ingest_master_calibs(datasetType, filenames, butler_dir, calib_dir, validity):
-    """Ingest the master calib of a given date.
-
-    Parameters
-    ----------
-    datasetType : str
-        Can be set to "bias" or "flat".
-    filenames : list
-        List of reference catalogue files to ingest.
-    butler_dir : str
-        Directory that contains the butler repo.
-    calib_dir : str
-        Directory that contains the calib repo.
-    validity : int
-        validity period in days for calib files.
-
+    """ Ingest the master calib of a given date.
+    Args:
+        datasetType (str): One of bias, dark or flat.
+        filenames (list of str): List of filenames to ingest.
+        butler_dir (str): Directory that contains the butler repo.
+        calib_dir (str): Directory that contains the calib repo.
+        validity (int): Validity period in days for calib files.
     """
     cmd = f"ingestCalibs.py {butler_dir}"
     cmd += " " + " ".join(filenames)
@@ -158,8 +154,8 @@ def make_master_calib(datasetType, calibId, dataIds, butler_dir, calib_dir, reru
     return run_command(cmd)
 
 
-def make_calexps(data_ids, rerun, butler_dir, calib_dir, no_exit=True, procs=1,
-                 clobber_config=False):
+def make_calexps(data_ids, rerun, butler_dir, calib_dir, no_exit=False, procs=1,
+                 clobber_config=False, timeout=None):
     """ Make calibrated exposures (calexps) using the LSST stack. These are astrometrically
     and photometrically calibrated as well as background subtracted. There are several byproducts
     of making calexps including sky background maps and preliminary source catalogues and metadata,
@@ -174,11 +170,13 @@ def make_calexps(data_ids, rerun, butler_dir, calib_dir, no_exit=True, procs=1,
         calib_dir : str
             The calib directory used by the butler repository.
         no_exit : bool, optional
-            If True (default), the program will not exit if an error is raised by the stack.
+            If True, the program will not exit if an error is raised by the stack. Default False.
         procs : int, optional
             The number of processes to use per node, by default 1.
         clobber_config : bool, optional
             Override config values, by default False.
+        timeout (float, optional): The subprocess timeout in seconds. If None (default), no timeout
+            is applied.
     """
     cmd = f"processCcd.py {butler_dir}"
     if no_exit:
@@ -193,7 +191,7 @@ def make_calexps(data_ids, rerun, butler_dir, calib_dir, no_exit=True, procs=1,
     if clobber_config:
         cmd += " --clobber-config"
 
-    run_command(cmd)
+    run_command(cmd, timeout=timeout)
 
 
 def make_discrete_sky_map(butler_dir, calib_dir, rerun):

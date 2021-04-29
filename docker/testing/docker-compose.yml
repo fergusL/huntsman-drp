@@ -10,6 +10,22 @@ services:
     logging:
         driver: none
 
+  hunts-pyro-services:
+    image: huntsmanarray/drp-lsst:develop
+    container_name: hunts-pyro-services
+    network_mode: "host"
+    stdin_open: true
+    tty: true
+    volumes:
+      - ${OBS_HUNTSMAN}:/opt/lsst/software/stack/obs_huntsman
+      - ${HUNTSMAN_DRP}:/opt/lsst/software/stack/huntsman-drp
+      - ${HUNTSMAN_LOG_DIR}:/opt/lsst/software/stack/huntsman-logs
+    environment:
+      - OBS_HUNTSMAN=/opt/lsst/software/stack/obs_huntsman
+      - HUNTSMAN_DRP=/opt/lsst/software/stack/huntsman-drp
+      - HUNTSMAN_ARCHIVE=/home/lsst/huntsman-archive
+    command: /opt/lsst/software/stack/huntsman-drp/scripts/pyro/start-pyro-services.sh
+
   python-tests:
     image: huntsmanarray/drp-lsst:develop
     build:
@@ -17,6 +33,7 @@ services:
       dockerfile: docker/Dockerfile
     depends_on:
       - mongo
+      - hunts-pyro-services
     network_mode: "host"
     stdin_open: true
     tty: true

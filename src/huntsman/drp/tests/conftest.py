@@ -6,7 +6,7 @@ from huntsman.drp.collection import RawExposureCollection
 from huntsman.drp.refcat import TapReferenceCatalogue
 from huntsman.drp.lsst.butler import ButlerRepository, TemporaryButlerRepository
 from huntsman.drp.utils import testing
-from huntsman.drp.calib import MasterCalibMaker
+from huntsman.drp.services.calib import MasterCalibMaker
 
 # ===========================================================================
 # Config
@@ -26,6 +26,11 @@ def config():
 
 # ===========================================================================
 # Reference catalogue
+
+
+@pytest.fixture(scope="function")
+def refcat_filename(config):
+    return testing.get_refcat_filename(config)
 
 
 @pytest.fixture(scope="function")
@@ -62,7 +67,7 @@ def fits_header_translator(config):
 
 
 @pytest.fixture(scope="function")
-def exposure_table(tmp_path_factory, config, fits_header_translator):
+def exposure_collection(tmp_path_factory, config, fits_header_translator):
     """
     Create a temporary directory populated with fake FITS images, then parse the images into the
     raw data table.
@@ -73,7 +78,7 @@ def exposure_table(tmp_path_factory, config, fits_header_translator):
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database
-    exposure_table = RawExposureCollection(config=config, collection_name="fake_data")
+    exposure_collection = RawExposureCollection(config=config, collection_name="fake_data")
     for filename, header in expseq.header_dict.items():
 
         # Parse the header
@@ -81,39 +86,39 @@ def exposure_table(tmp_path_factory, config, fits_header_translator):
         parsed_header["filename"] = filename
 
         # Insert the parsed header into the DB table
-        exposure_table.insert_one(parsed_header)
+        exposure_collection.insert_one(parsed_header)
 
     # Make sure table has the correct number of rows
-    assert exposure_table.count_documents() == expseq.file_count
-    yield exposure_table
+    assert exposure_collection.count_documents() == expseq.file_count
+    yield exposure_collection
 
     # Remove the metadata from the DB ready for other tests
-    all_metadata = exposure_table.find()
-    exposure_table.delete_many(all_metadata)
+    all_metadata = exposure_collection.find()
+    exposure_collection.delete_many(all_metadata)
 
 
 @pytest.fixture(scope="function")
-def exposure_table_real_data(config, fits_header_translator):
+def exposure_collection_real_data(config, fits_header_translator):
     """
     Create a temporary directory populated with fake FITS images, then parse the images into the
     raw data table.
     """
     # Populate the database
-    exposure_table = testing.create_test_exposure_table(config, fits_header_translator, screen=True)
+    exposure_collection = testing.create_test_exposure_collection(config, fits_header_translator, screen=True)
 
-    yield exposure_table
+    yield exposure_collection
 
     # Remove the metadata from the DB ready for other tests
-    all_metadata = exposure_table.find()
-    exposure_table.delete_many(all_metadata)
+    all_metadata = exposure_collection.find()
+    exposure_collection.delete_many(all_metadata)
 
 
 @pytest.fixture(scope="function")
-def master_calib_table_real_data(exposure_table_real_data, config):
+def master_calib_collection_real_data(exposure_collection_real_data, config):
     """ Make a master calib table by reducing real calib data.
     TODO: Store created files so they can be copied in for quicker tests.
     """
-    calib_maker = MasterCalibMaker(exposure_table=exposure_table_real_data, config=config)
+    calib_maker = MasterCalibMaker(exposure_collection=exposure_collection_real_data, config=config)
     calib_maker.logger.info("Creating master calibs for tests.")
 
     # Make master calibs
@@ -123,16 +128,16 @@ def master_calib_table_real_data(exposure_table_real_data, config):
 
     calib_maker.logger.info("Finished creating master calibs for tests.")
 
-    calib_table = calib_maker._calib_table
-    yield calib_table
+    calib_collection = calib_maker._calib_collection
+    yield calib_collection
 
     # Remove the metadata from the DB ready for other tests
-    all_metadata = calib_table.find()
-    calib_table.delete_many(all_metadata)
+    all_metadata = calib_collection.find()
+    calib_collection.delete_many(all_metadata)
 
 
 @pytest.fixture(scope="function")
-def tempdir_and_exposure_table_with_uningested_files(
+def tempdir_and_exposure_collection_with_uningested_files(
         tmp_path_factory, config, fits_header_translator):
     """
     Create a temporary directory populated with fake FITS images, then parse the images into the
@@ -144,7 +149,7 @@ def tempdir_and_exposure_table_with_uningested_files(
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database
-    exposure_table = RawExposureCollection(config=config, collection_name="fake_data")
+    exposure_collection = RawExposureCollection(config=config, collection_name="fake_data")
     n_stop = len(expseq.header_dict) * 0.7 // 1  # ingest ~70% of the files
     n = 0
     for filename, header in expseq.header_dict.items():
@@ -156,12 +161,12 @@ def tempdir_and_exposure_table_with_uningested_files(
         parsed_header["filename"] = filename
 
         # Insert the parsed header into the DB table
-        exposure_table.insert_one(parsed_header)
+        exposure_collection.insert_one(parsed_header)
 
     # Make sure table has the correct number of rows
-    assert exposure_table.count_documents() == n_stop
-    yield (tempdir, exposure_table)
+    assert exposure_collection.count_documents() == n_stop
+    yield (tempdir, exposure_collection)
 
     # Remove the metadata from the DB ready for other tests
-    all_metadata = exposure_table.find()
-    exposure_table.delete_many(all_metadata)
+    all_metadata = exposure_collection.find()
+    exposure_collection.delete_many(all_metadata)

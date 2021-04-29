@@ -3,7 +3,7 @@ extract information like whether a file has wcs/if the file is corrupt and other
 metadata. This metadata is then stored in the database quality table.
 """
 import os
-from huntsman.drp.ingestor import FileIngestor
+from huntsman.drp.services.ingestor import FileIngestor
 
 if __name__ == "__main__":
 

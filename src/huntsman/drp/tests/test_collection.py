@@ -18,17 +18,17 @@ def test_mongodb_wrong_host_name(config):
         RawExposureCollection(config=modified_config)
 
 
-def test_datatable_query_by_date(exposure_table, fits_header_translator):
+def test_datatable_query_by_date(exposure_collection, fits_header_translator):
     """ """
     # Get list of all dates in the database
-    dates = [d["dateObs"] for d in exposure_table.find()]
+    dates = [d["dateObs"] for d in exposure_collection.find()]
     n_files = len(dates)
 
     dates_unique = np.unique(dates)  # Sorted array of unique dates
     date_end = dates_unique[-1]
     for date_start in dates_unique[:-1]:
         # Get filenames between dates
-        filenames = exposure_table.find(key="filename", date_start=date_start, date_end=date_end)
+        filenames = exposure_collection.find(key="filename", date_start=date_start, date_end=date_end)
         assert len(filenames) <= n_files  # This holds because we sorted the dates
         n_files = len(filenames)
         for filename in filenames:
@@ -39,7 +39,7 @@ def test_datatable_query_by_date(exposure_table, fits_header_translator):
             assert date < parse_date(date_end)
 
 
-def test_query_latest(exposure_table, config, tol=1):
+def test_query_latest(exposure_collection, config, tol=1):
     """Test query_latest finds the correct number of DB entries."""
     date_start = config["exposure_sequence"]["start_date"]
     n_days = config["exposure_sequence"]["n_days"]
@@ -51,16 +51,16 @@ def test_query_latest(exposure_table, config, tol=1):
 
     timediff = date_now - date_start
     # This should capture all the files
-    qresult = exposure_table.find_latest(days=timediff.days + tol)
-    assert len(qresult) == len(exposure_table.find())
+    qresult = exposure_collection.find_latest(days=timediff.days + tol)
+    assert len(qresult) == len(exposure_collection.find())
     # This should capture none of the files
-    qresult = exposure_table.find_latest(days=0, hours=0, seconds=0)
+    qresult = exposure_collection.find_latest(days=0, hours=0, seconds=0)
     assert len(qresult) == 0
 
 
-def test_update(exposure_table):
+def test_update(exposure_collection):
     """Test that we can update a document specified by a filename."""
-    data = exposure_table.find()[0]
+    data = exposure_collection.find()[0]
     # Get a filename to use as an identifier
     filename = data["filename"]
     # Get a key to update
@@ -70,49 +70,49 @@ def test_update(exposure_table):
     assert old_value != new_value  # Let's be sure...
     # Update the key with the new value
     update_dict = {key: new_value, "filename": filename}
-    exposure_table.update_one(data, update_dict)
+    exposure_collection.update_one(data, update_dict)
     # Check the values match
-    data_updated = exposure_table.find()[0]
+    data_updated = exposure_collection.find()[0]
     assert data_updated[key] == new_value
 
 
-def test_update_file_data_bad_filename(exposure_table):
+def test_update_file_data_bad_filename(exposure_collection):
     """Test that we can update a document specified by a filename."""
     # Specify the bad filename
-    filenames = exposure_table.find(key="filename")
+    filenames = exposure_collection.find(key="filename")
     filename = "ThisFileDoesNotExist"
     assert filename not in filenames
     update_dict = {"A Key": "A Value", "filename": filename}
     with pytest.raises(RuntimeError):
-        exposure_table.update_one(update_dict, update_dict, upsert=False)
+        exposure_collection.update_one(update_dict, update_dict, upsert=False)
 
 
-def test_quality_filter(exposure_table):
+def test_quality_filter(exposure_collection):
     """
     """
     document_filter = {"dataType": "dark"}
-    documents = exposure_table.find(document_filter)
+    documents = exposure_collection.find(document_filter)
     n_docs = len(documents)
 
     for i, d in enumerate(documents):
-        exposure_table.update_one(d, {"TEST_METRIC_1": i})
+        exposure_collection.update_one(d, {"TEST_METRIC_1": i})
     for i, d in enumerate(documents[::-1]):
-        exposure_table.update_one(d, {"TEST_METRIC_2": i})
+        exposure_collection.update_one(d, {"TEST_METRIC_2": i})
 
-    exposure_table.config["quality"]["raw"]["dark"] = {"TEST_METRIC_1": {"less_than": 1}}
-    matches = exposure_table.find(document_filter, quality_filter=True)
+    exposure_collection.config["quality"]["raw"]["dark"] = {"TEST_METRIC_1": {"less_than": 1}}
+    matches = exposure_collection.find(document_filter, quality_filter=True)
     assert len(matches) == 1
 
-    exposure_table.config["quality"]["raw"]["dark"] = {"TEST_METRIC_1": {"less_than": 2}}
-    matches = exposure_table.find(document_filter, quality_filter=True)
+    exposure_collection.config["quality"]["raw"]["dark"] = {"TEST_METRIC_1": {"less_than": 2}}
+    matches = exposure_collection.find(document_filter, quality_filter=True)
     assert len(matches) == 2
 
     cond = {"TEST_METRIC_1": {"less_than": 1}, "TEST_METRIC_2": {"greater_than": n_docs - 2}}
-    exposure_table.config["quality"]["raw"]["dark"] = cond
-    matches = exposure_table.find(document_filter, quality_filter=True)
+    exposure_collection.config["quality"]["raw"]["dark"] = cond
+    matches = exposure_collection.find(document_filter, quality_filter=True)
     assert len(matches) == 1
 
     cond = {"TEST_METRIC_1": {"less_than": 1}, "TEST_METRIC_2": {"less_than": 1}}
-    exposure_table.config["quality"]["raw"]["dark"] = cond
-    matches = exposure_table.find(document_filter, quality_filter=True)
+    exposure_collection.config["quality"]["raw"]["dark"] = cond
+    matches = exposure_collection.find(document_filter, quality_filter=True)
     assert len(matches) == 0

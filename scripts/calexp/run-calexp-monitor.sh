@@ -2,4 +2,4 @@
 set -e
 
 source ${HUNTSMAN_DRP}/docker/bash-config.sh
-python ${HUNTSMAN_DRP}/scripts/run-calexp-monitor.py
+python ${HUNTSMAN_DRP}/scripts/calexp/run-calexp-monitor.py

@@ -6,7 +6,7 @@ from panoptes.utils import error
 
 from huntsman.drp.utils.testing import FakeExposureSequence
 from huntsman.drp.collection import RawExposureCollection
-from huntsman.drp.calib import MasterCalibMaker
+from huntsman.drp.services.calib import MasterCalibMaker
 from huntsman.drp.utils.ingest import METRIC_SUCCESS_FLAG
 
 
@@ -21,7 +21,7 @@ def config_lite(config):
 
 
 @pytest.fixture(scope="function")
-def exposure_table_lite(tmp_path_factory, config_lite, fits_header_translator):
+def exposure_collection_lite(tmp_path_factory, config_lite, fits_header_translator):
     """
     Create a temporary directory populated with fake FITS images, then parse the images into the
     raw data table.
@@ -32,7 +32,7 @@ def exposure_table_lite(tmp_path_factory, config_lite, fits_header_translator):
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database
-    exposure_table = RawExposureCollection(config=config_lite, collection_name="fake_data_lite")
+    exposure_collection = RawExposureCollection(config=config_lite, collection_name="fake_data_lite")
 
     for filename, header in expseq.header_dict.items():
 
@@ -42,20 +42,20 @@ def exposure_table_lite(tmp_path_factory, config_lite, fits_header_translator):
         parsed_header[METRIC_SUCCESS_FLAG] = True
 
         # Insert the parsed header into the DB table
-        exposure_table.insert_one(parsed_header)
+        exposure_collection.insert_one(parsed_header)
 
     # Make sure table has the correct number of rows
-    assert exposure_table.count_documents() == expseq.file_count
-    yield exposure_table
+    assert exposure_collection.count_documents() == expseq.file_count
+    yield exposure_collection
 
     # Remove the metadata from the DB ready for other tests
-    all_metadata = exposure_table.find()
-    exposure_table.delete_many(all_metadata)
+    all_metadata = exposure_collection.find()
+    exposure_collection.delete_many(all_metadata)
 
 
 @pytest.fixture(scope="function")
-def calib_maker(config, exposure_table_lite):
-    calib_maker = MasterCalibMaker(config=config, exposure_table=exposure_table_lite)
+def calib_maker(config, exposure_collection_lite):
+    calib_maker = MasterCalibMaker(config=config, exposure_collection=exposure_collection_lite)
     yield calib_maker
     calib_maker.stop()
 
@@ -70,8 +70,8 @@ def test_master_calib_maker(calib_maker, config):
     n_bias = n_calib_dates * n_cameras
     n_dark = n_calib_dates * n_cameras
 
-    calib_table = calib_maker._calib_table
-    assert not calib_table.find()  # Check calib table is empty
+    calib_collection = calib_maker._calib_collection
+    assert not calib_collection.find()  # Check calib table is empty
 
     assert not calib_maker.is_running
     calib_maker.start()
@@ -81,7 +81,7 @@ def test_master_calib_maker(calib_maker, config):
     while not timer.expired():
         calib_maker.logger.debug("Waiting for calibs...")
 
-        dataset_types = calib_table.find(key="datasetType")
+        dataset_types = calib_collection.find(key="datasetType")
 
         # Check if we are finished
         if len([d for d in dataset_types if d == "flat"]) == n_flats:

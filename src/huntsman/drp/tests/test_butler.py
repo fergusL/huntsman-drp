@@ -30,12 +30,12 @@ def test_temp_repo(temp_butler_repo):
         assert len(temp_butler_repo._butlers) == 0
 
 
-def test_ingest(exposure_table, butler_repos, config):
+def test_ingest(exposure_collection, butler_repos, config):
     """Test ingest for each Butler repository."""
     config = config["exposure_sequence"]
     n_filters = len(config["filters"])
 
-    filenames = exposure_table.find(key="filename")
+    filenames = exposure_collection.find(key="filename")
     for butler_repo in butler_repos:
         with butler_repo as br:
 
@@ -71,7 +71,7 @@ def test_ingest(exposure_table, butler_repos, config):
             assert len(data_ids) == n_dark
 
 
-def test_make_master_calibs(exposure_table, temp_butler_repo, config):
+def test_make_master_calibs(exposure_collection, temp_butler_repo, config):
     """ Make sure the correct number of master bias frames are produced."""
     test_config = config["exposure_sequence"]
     n_filters = len(test_config["filters"])
@@ -81,7 +81,7 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
     n_flat = test_config["n_cameras"] * n_filters
 
     # Use the Butler repo to make the calibs
-    filenames = exposure_table.find(key="filename")
+    filenames = exposure_collection.find(key="filename")
     with temp_butler_repo as br:
         br.ingest_raw_data(filenames)
 
@@ -119,8 +119,8 @@ def test_make_master_calibs(exposure_table, temp_butler_repo, config):
         assert len(ccds) == test_config["n_cameras"]
 
         # Check the calibs in the archive
-        master_calib_table = MasterCalibCollection(config=config)
-        calib_metadata = master_calib_table.find()
+        master_calib_collection = MasterCalibCollection(config=config)
+        calib_metadata = master_calib_collection.find()
         filenames = [c["filename"] for c in calib_metadata]
         datasettypes = [c["datasetType"] for c in calib_metadata]
         assert len(calib_metadata) == n_flat + n_bias + n_dark

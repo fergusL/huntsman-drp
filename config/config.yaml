@@ -104,3 +104,7 @@ quality:
         well_fullfrac:
           greater_than: 0.13
           less_than: 0.19
+
+pyro:
+  host: localhost
+  port: 6563

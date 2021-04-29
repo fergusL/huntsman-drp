@@ -17,7 +17,7 @@ class MasterCalibMaker(HuntsmanBase):
 
     _date_key = "dateObs"
 
-    def __init__(self, exposure_table=None, calib_table=None, nproc=None, **kwargs):
+    def __init__(self, exposure_collection=None, calib_collection=None, nproc=None, **kwargs):
         """
         Args:
             nproc (int): The number of processes to use. If None (default), will check the config
@@ -39,13 +39,13 @@ class MasterCalibMaker(HuntsmanBase):
         self._validity = datetime.timedelta(days=validity)  # TODO: Validity based on calib type
 
         # Create datatable objects
-        if exposure_table is None:
-            exposure_table = RawExposureCollection(config=self.config, logger=self.logger)
-        self._exposure_table = exposure_table
+        if exposure_collection is None:
+            exposure_collection = RawExposureCollection(config=self.config, logger=self.logger)
+        self._exposure_collection = exposure_collection
 
-        if calib_table is None:
-            calib_table = MasterCalibCollection(config=self.config, logger=self.logger)
-        self._calib_table = calib_table
+        if calib_collection is None:
+            calib_collection = MasterCalibCollection(config=self.config, logger=self.logger)
+        self._calib_collection = calib_collection
 
         # Create threads
         self._stop_threads = False
@@ -106,7 +106,7 @@ class MasterCalibMaker(HuntsmanBase):
         # Identify raw exposures to process based on calib IDs
         raw_docs_to_process = []
         for calib_doc in calib_docs_to_process:
-            docs = self._exposure_table.get_matching_raw_calibs(calib_doc, calib_date)
+            docs = self._exposure_collection.get_matching_raw_calibs(calib_doc, calib_date)
             if docs:
                 raw_docs_to_process.extend(docs)
             else:
@@ -128,7 +128,7 @@ class MasterCalibMaker(HuntsmanBase):
                 datasetTypes_to_skip.append("dark")
 
         # Process data in a temporary butler repo
-        with TemporaryButlerRepository(calib_table=self._calib_table) as br:
+        with TemporaryButlerRepository(calib_collection=self._calib_collection) as br:
 
             # Ingest raw exposures
             br.ingest_raw_data([_["filename"] for _ in raw_docs_to_process])
@@ -137,10 +137,10 @@ class MasterCalibMaker(HuntsmanBase):
             for calib_type in self._calib_types:
 
                 filenames = [
-                    c["filename"] for c in calibs_to_ingest if c["calibType"] == calib_type]
+                    c["filename"] for c in calibs_to_ingest if c["datasetType"] == calib_type]
                 if filenames:
                     br.ingest_master_calibs(calib_type, filenames=filenames,
-                                            validity=self._validity)
+                                            validity=self._validity.days)
 
                 # Check if there is sufficient data to proceed
                 elif calib_type in datasetTypes_to_skip:
@@ -196,7 +196,7 @@ class MasterCalibMaker(HuntsmanBase):
         Returns:
             bool: True if the calib ID requires processing, else False.
         """
-        query_result = self._calib_table.find_one(document_filter=calib_id)
+        query_result = self._calib_collection.find_one(document_filter=calib_id)
 
         # If the calib does not already exist, return True
         if not query_result:
@@ -222,7 +222,7 @@ class MasterCalibMaker(HuntsmanBase):
         docs = []
         for calib_type in self._calib_types:
 
-            docs_of_type = self._exposure_table.find(
+            docs_of_type = self._exposure_collection.find(
                 {"dataType": calib_type}, date_start=date_start, date_end=date_end, screen=True,
                 quality_filter=True)
 
@@ -273,6 +273,6 @@ class MasterCalibMaker(HuntsmanBase):
             list of datetime: The list of dates.
         """
         dates = set(
-            [date_to_ymd(d) for d in self._exposure_table.find(key="date", screen=True,
+            [date_to_ymd(d) for d in self._exposure_collection.find(key="date", screen=True,
              quality_filter=True)])
         return list(dates)

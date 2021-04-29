@@ -2,4 +2,4 @@
 set -e
 
 source ${HUNTSMAN_DRP}/docker/bash-config.sh
-python ${HUNTSMAN_DRP}/scripts/run-calib-maker.py
+python ${HUNTSMAN_DRP}/scripts/pyro/start-pyro-services.py

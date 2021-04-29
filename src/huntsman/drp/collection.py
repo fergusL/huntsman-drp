@@ -71,7 +71,7 @@ class Collection(HuntsmanBase):
         Returns:
             result (list): List of DataIds or key values if key is specified.
         """
-        document_filter = Document(document_filter)
+        document_filter = Document(document_filter, copy=True)
         with suppress(KeyError):
             del document_filter["date_modified"]  # This might change so don't match with it
 
@@ -131,7 +131,7 @@ class Collection(HuntsmanBase):
             overwrite (bool, optional): If True override any existing document, by default False.
         """
         # Check the required columns exist in the new document
-        document = self._document_type(document)
+        document = self._document_type(document, copy=True)
         document_id = document.get_mongo_id()
 
         # Check there is at most one match in the table
@@ -162,7 +162,7 @@ class Collection(HuntsmanBase):
             upsert (bool, optional): If True perform the insert even if no matching documents
                 are found, by default False.
         """
-        document_filter = Document(document_filter)
+        document_filter = Document(document_filter, copy=True)
         with suppress(KeyError):
             del document_filter["date_modified"]  # This might change so don't match with it
 
@@ -364,8 +364,15 @@ class MasterCalibCollection(Collection):
             doc_filter = {k: document[k] for k in matching_keys[calib_type]}
             doc_filter["datasetType"] = calib_type
 
-            # Query the calib table
+            # Find matching docs within valid date range
             calib_docs = self.find(doc_filter, date_start=date_start, date_end=date_end)
+
+            # If none within valid range, log a warning and proceed
+            if len(calib_docs) == 0:
+                self.logger.warning(f"Best {calib_type} outside valid date range for {document}.")
+                calib_docs = self.find(doc_filter)
+
+            # If there are still no matches, raise an error
             if len(calib_docs) == 0:
                 raise FileNotFoundError(f"No matching master {calib_type} for {doc_filter}.")
 

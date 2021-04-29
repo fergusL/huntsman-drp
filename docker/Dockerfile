@@ -8,6 +8,7 @@ ARG user=lsst
 ENV LSST_HOME=/opt/lsst/software/stack
 ENV USER=${user}
 ENV HUNTSMAN_LOG_DIR="${LSST_HOME}"/huntsman-logs
+ENV HUNTSMAN_ARCHIVE=/home/lsst/huntsman-archive
 
 USER root
 RUN yum install -y wget vim sudo && \
@@ -32,14 +33,15 @@ RUN yum install -y wget vim sudo && \
   echo "https://:@s3.lsst.codes" >> ~/.git-credentials && \
   # Install extra python stuff into LSST conda env
   source ${LSST_HOME}/loadLSST.bash && \
-  pip install ipython pymongo astroquery panoptes-utils && \
+  pip install ipython pymongo astroquery panoptes-utils pyro5 && \
   # Copy obs_huntsman into the image (install handled by EUPS)
   cd "${LSST_HOME}" && \
   git clone https://github.com/AstroHuntsman/obs_huntsman.git && \
   # Make directory for huntsman-drp repository
   mkdir "${LSST_HOME}"/huntsman-drp && \
   # Make directories for logs and set permissions
-  mkdir -p "${HUNTSMAN_LOG_DIR}" && chown -R "${user}:${user}" "${HUNTSMAN_LOG_DIR}"
+  mkdir -p "${HUNTSMAN_LOG_DIR}" && chown -R "${user}:${user}" "${HUNTSMAN_LOG_DIR}" && \
+  mkdir -p "${HUNTSMAN_ARCHIVE}" && chown -R "${user}:${user}" "${HUNTSMAN_ARCHIVE}"
 
 # Copy huntsman-drp into the image (install handled by EUPS)
 COPY --chown="${USER}:${USER}" . "${LSST_HOME}"/huntsman-drp

@@ -80,8 +80,9 @@ def get_logdir():
     return logdir
 
 
-def get_logger(rotation="500 MB"):
+def get_logger(rotation="500 MB", retention=5):
     """ Get the huntsman-drp logger.
+    See documentation for loguru.Logger.add.
     """
     # Get the logs directory
     logdir = get_logdir()
@@ -103,6 +104,6 @@ def get_logger(rotation="500 MB"):
                     duplicate = True
                     break
         if not duplicate:
-            LOGGER.add(filename, level=level, rotation=rotation, enqueue=True)
+            LOGGER.add(filename, level=level, rotation=rotation, retention=retention, enqueue=True)
 
     return LOGGER

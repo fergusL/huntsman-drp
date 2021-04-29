@@ -1,5 +1,5 @@
 import os
-from huntsman.drp.calib import MasterCalibMaker
+from huntsman.drp.services.calib import MasterCalibMaker
 
 if __name__ == "__main__":
 

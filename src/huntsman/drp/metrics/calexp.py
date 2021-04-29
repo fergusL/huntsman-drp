@@ -12,7 +12,8 @@ def mag_zeropoint(calexp):
         astropy.Quantity: The magnitude zero point.
     """
     fluxzero = calexp.getPhotoCalib().getInstFluxAtZeroMagnitude()
-    return -2.5 * np.log10(fluxzero) * u.mag
+    # Note the missing minus sign here...
+    return 2.5 * np.log10(fluxzero) * u.mag
 
 
 def psf_fwhm(calexp):
