@@ -153,6 +153,6 @@ class CalexpQualityMonitor(ProcessQueue):
             bool: True if processing required, else False.
         """
         try:
-            return "calexp" not in document["quality"]
+            return "calexp" not in document["metrics"]
         except KeyError:
             return True
