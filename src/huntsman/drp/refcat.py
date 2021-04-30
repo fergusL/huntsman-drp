@@ -239,10 +239,10 @@ def create_refcat_service(pyro_name=None, config=None, logger=None, host="localh
     Returns:
         PyroService: The unstarted pyro servce object.
     """
-    if not pyro_name:
-        pyro_name = config["pyro"]["refcat"]["name"]
-
     refcat_server = RefcatServer(config=config, logger=logger, **kwargs)
+
+    if not pyro_name:
+        pyro_name = refcat_server.config["pyro"]["refcat"]["name"]
 
     service = PyroService(server_instance=refcat_server, pyro_name=pyro_name, config=config,
                           host=host, port=port, logger=logger)
