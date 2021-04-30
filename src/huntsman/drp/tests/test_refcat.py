@@ -1,9 +1,12 @@
 import pytest
 import tempfile
+from contextlib import suppress
+from requests.exceptions import HTTPError
+
 import numpy as np
 import pandas as pd
-from requests.exceptions import HTTPError
-from contextlib import suppress
+from astropy import units as u
+from astropy.coordinates import SkyCoord
 
 from huntsman.drp import refcat as rc
 
@@ -19,35 +22,22 @@ def dec_list():
 
 
 @pytest.fixture(scope="function")
-def testing_refcat_server(config, refcat_filename):
-    """ A testing refcat server that loads the refcat from file rather than downloading it.
-    """
-    refcat_kwargs = dict(refcat_filename=refcat_filename)
-
-    # Yield the refcat server process
-    refcat_service = rc.create_refcat_service(pyro_name="test_refcat",
-                                              refcat_type=rc.TestingTapReferenceCatalogue,
-                                              refcat_kwargs=refcat_kwargs,
-                                              config=config)
-    refcat_service.start()
-    yield refcat_service
-
-    # Shutdown the refcat server after we are done
-    refcat_service.stop()
+def coords(ra_list, dec_list):
+    return [SkyCoord(ra=ra * u.deg, dec=dec * u.deg) for ra, dec in zip(ra_list, dec_list)]
 
 
-def test_refcat_client(config, testing_refcat_server, ra_list, dec_list):
+def test_refcat_client(config, testing_refcat_server, coords):
 
     ra_key = config["refcat"]["ra_key"]
     dec_key = config["refcat"]["dec_key"]
 
-    client = rc.RefcatClient(pyro_name="test_refcat")
+    client = rc.RefcatClient(config=config)
 
     with tempfile.NamedTemporaryFile() as tf:
 
         filename = tf.name
 
-        df_ret = client.make_reference_catalogue(ra_list, dec_list, filename=filename)
+        df_ret = client.make_reference_catalogue(coords, filename=filename)
 
         for df in df_ret, pd.read_csv(filename):
 
@@ -60,11 +50,12 @@ def test_refcat_client(config, testing_refcat_server, ra_list, dec_list):
             df[ra_key].values.astype("float")
 
 
-def test_make_reference_catalogue(reference_catalogue, config, ra_list, dec_list, tolerance=0.2):
+def test_make_reference_catalogue(reference_catalogue, config, coords, ra_list, dec_list,
+                                  tolerance=0.2):
 
     # Do the cone searches
     try:
-        df = reference_catalogue.make_reference_catalogue(ra_list, dec_list)
+        df = reference_catalogue.make_reference_catalogue(coords)
     except HTTPError as err:
         pytest.skip(f"Encountered HTTPError while testing refcat: {err}")
     assert df.shape[0] != 0  # Make sure we have some sources

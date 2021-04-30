@@ -1,8 +1,14 @@
 import os
+import time
 import yaml
 import pytest
 
-from huntsman.drp.core import get_config
+from huntsman.drp.core import get_config, get_logger, get_logdir, FILE_LOG_LEVELS
+
+
+@pytest.fixture(scope="module")
+def logger():
+    return get_logger()
 
 
 @pytest.fixture(scope="module")
@@ -13,6 +19,25 @@ def config_dict():
 @pytest.fixture(scope="module")
 def config_dict_local():
     return {"c": 4, "d": 5}
+
+
+def test_logger(logger):
+    """
+    """
+    time.sleep(3)  # There may be some async processes writing to the logs...
+
+    for level in FILE_LOG_LEVELS:
+
+        # Log a message at this level
+        message = f"hello from {level}"
+        getattr(logger, level.lower())(message)
+
+        filename = os.path.join(get_logdir(), f"hunts-drp-{level.lower()}.log")
+        assert os.path.isfile(filename)
+
+        with open(filename, "r") as f:
+            lines = f.readlines()
+            assert message in lines[-1]
 
 
 @pytest.fixture(scope="module")

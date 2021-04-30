@@ -2,6 +2,9 @@
 from collections import abc
 from contextlib import suppress
 
+from astropy.coordinates import SkyCoord
+from astropy import units as u
+
 from huntsman.drp.core import get_config
 from huntsman.drp.utils.date import parse_date
 from huntsman.drp.utils.mongo import encode_mongo_filter
@@ -107,6 +110,15 @@ class RawExposureDocument(Document):
 
         if "date" not in self.keys():
             self["date"] = parse_date(self["dateObs"])
+
+    def get_central_skycoord(self):
+        """ Return the central celestial coordinate of the exposure using the WCS info.
+        Returns:
+            astropy.coordinates.SkyCoord: The central coordinate.
+        """
+        ra = self["metrics"]["ra_centre"] * u.deg
+        dec = self["metrics"]["dec_centre"] * u.deg
+        return SkyCoord(ra=ra, dec=dec)
 
 
 class CalibDocument(Document):

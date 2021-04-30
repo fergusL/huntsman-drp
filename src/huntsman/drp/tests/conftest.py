@@ -1,9 +1,10 @@
 import pytest
+import time
 
 from huntsman.drp.core import get_config
 from huntsman.drp.fitsutil import FitsHeaderTranslator
 from huntsman.drp.collection import RawExposureCollection
-from huntsman.drp.refcat import TapReferenceCatalogue
+from huntsman.drp import refcat as rc
 from huntsman.drp.lsst.butler import ButlerRepository, TemporaryButlerRepository
 from huntsman.drp.utils import testing
 from huntsman.drp.services.calib import MasterCalibMaker
@@ -35,7 +36,25 @@ def refcat_filename(config):
 
 @pytest.fixture(scope="function")
 def reference_catalogue(config):
-    return TapReferenceCatalogue(config=config)
+    return rc.TapReferenceCatalogue(config=config)
+
+
+@pytest.fixture(scope="function")
+def testing_refcat_server(config, refcat_filename):
+    """ A testing refcat server that loads the refcat from file rather than downloading it.
+    """
+    refcat_kwargs = dict(refcat_filename=refcat_filename)
+
+    # Yield the refcat server process
+    refcat_service = rc.create_refcat_service(refcat_type=rc.TestingTapReferenceCatalogue,
+                                              refcat_kwargs=refcat_kwargs,
+                                              config=config)
+    refcat_service.start()
+    time.sleep(5)  # Allow some startup time
+    yield refcat_service
+
+    # Shutdown the refcat server after we are done
+    refcat_service.stop()
 
 # ===========================================================================
 # Butler repositories
@@ -104,7 +123,7 @@ def exposure_collection_real_data(config, fits_header_translator):
     raw data table.
     """
     # Populate the database
-    exposure_collection = testing.create_test_exposure_collection(config, fits_header_translator, screen=True)
+    exposure_collection = testing.create_test_exposure_collection(config)
 
     yield exposure_collection
 

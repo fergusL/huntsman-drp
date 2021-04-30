@@ -1,3 +1,4 @@
+import tempfile
 from functools import partial
 from multiprocessing.pool import ThreadPool
 
@@ -5,6 +6,7 @@ from huntsman.drp.services.base import ProcessQueue
 from huntsman.drp.utils.library import load_module
 from huntsman.drp.lsst.butler import TemporaryButlerRepository
 from huntsman.drp.metrics.calexp import METRICS
+from huntsman.drp.refcat import RefcatClient
 
 
 def _get_quality_metrics(calexp):
@@ -18,8 +20,7 @@ def _get_quality_metrics(calexp):
     return result
 
 
-def _process_document(document, exposure_collection, calib_collection, refcat_filename, timeout,
-                      **kwargs):
+def _process_document(document, exposure_collection, calib_collection, timeout, **kwargs):
     """ Create a calibrated exposure (calexp) for the given data ID and store the metadata.
     Args:
         document (RawExposureDocument): The document to process.
@@ -64,16 +65,23 @@ def _process_document(document, exposure_collection, calib_collection, refcat_fi
                                     validity=1000)
 
         # Make and ingest the reference catalogue
-        if refcat_filename is None:
-            logger.debug(f"Making refcat for {document}")
+        logger.debug(f"Making refcat for {document}")
+        refcat_client = RefcatClient(config=config, logger=logger)
+
+        with tempfile.NamedTemporaryFile(prefix=directory_prefix) as tf:
             try:
-                br.make_reference_catalogue()
+                # Download the refcat to the tempfile
+                refcat_client.make_from_documents([document], filename=tf.name)
             except Exception as err:
                 logger.error(f"Exception while making refcat for {document}: {err!r}")
                 raise err
-        else:
-            logger.debug(f"Using existing refcat for {document}: {refcat_filename}")
-            br.ingest_reference_catalogue([refcat_filename])
+            finally:
+                # Cleanup the refcat client
+                # This *shouldn't* be necessary but seems like it might be...
+                # TODO: Parse refcat client as function arg?
+                refcat_client._proxy._pyroRelease()
+
+            br.ingest_reference_catalogue([tf.name])
 
         # Make the calexp
         logger.debug(f"Making calexp for {document}")
@@ -95,7 +103,7 @@ def _process_document(document, exposure_collection, calib_collection, refcat_fi
 
         # Make the document and update the DB
         document_filter = {k: calexpId[k] for k in required_keys}
-        to_update = {"quality": {"calexp": metrics}}
+        to_update = {"metrics": {"calexp": metrics}}
         exposure_collection.update_one(document_filter, to_update=to_update)
 
 
@@ -105,11 +113,9 @@ class CalexpQualityMonitor(ProcessQueue):
     """
     _pool_class = ThreadPool  # Use ThreadPool as LSST code makes its own subprocesses
 
-    def __init__(self, nproc=None, refcat_filename=None, timeout=None, *args, **kwargs):
+    def __init__(self, nproc=None, timeout=None, *args, **kwargs):
         """
         Args:
-            refcat_filename (str, optional): The reference catalogue filename. If not provided,
-                will create a new refcat.
             nproc (int): The number of processes to use. If None (default), will check the config
                 item `calexp-monitor.nproc` with a default value of 1.
         """
@@ -126,13 +132,10 @@ class CalexpQualityMonitor(ProcessQueue):
         # Specify timeout for calexp processing
         self._timeout = timeout if timeout is not None else calexp_config.get("timeout", None)
 
-        self._refcat_filename = refcat_filename
-
     def _async_process_objects(self, *args, **kwargs):
         """ Continually process objects in the queue. """
 
-        func = partial(_process_document, refcat_filename=self._refcat_filename,
-                       timeout=self._timeout)
+        func = partial(_process_document, timeout=self._timeout)
 
         return super()._async_process_objects(process_func=func)
 

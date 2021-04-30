@@ -1,5 +1,6 @@
 import os
 import yaml
+import time
 from datetime import timedelta
 import numpy as np
 from astropy.io import fits
@@ -10,7 +11,8 @@ from huntsman.drp.lsst.butler import ButlerRepository
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import parse_date
 from huntsman.drp.collection import RawExposureCollection
-from huntsman.drp.utils.ingest import METRIC_SUCCESS_FLAG
+from huntsman.drp.services.ingestor import FileIngestor
+
 
 EXPTIME_BIAS = 1E-32  # Minimum exposure time for ZWO cameras is > 0
 
@@ -31,13 +33,17 @@ def datetime_to_taiObs(date):
 # Real test data
 
 
+def get_testdata_dir(config):
+    return os.path.join(config["directories"]["root"], "tests", "data")
+
+
 def get_testdata_fits_filenames(config=None):
     """
     """
     if config is None:
         config = get_config()
 
-    datadir = os.path.join(config["directories"]["root"], "tests", "data")
+    datadir = get_testdata_dir(config)
 
     # Get test data filenames
     filenames = []
@@ -79,25 +85,32 @@ def create_test_bulter_repository(directory, config=None, **kwargs):
     return br
 
 
-def create_test_exposure_collection(config, fits_header_translator, screen=True):
-    """ Create a temporary directory populated with fake FITS images, then parse the images into the
-    raw data table.
+def create_test_exposure_collection(config, name="real_data"):
+    """ Ingest real testing images into a RawExposureCollection
     """
-    # Populate the database
-    exposure_collection = RawExposureCollection(config=config, collection_name="real_data")
+    dir = get_testdata_dir(config)
+    filenames = get_testdata_fits_filenames(config)
 
-    for filename in get_testdata_fits_filenames(config=config):
+    exposure_collection = RawExposureCollection(config=config, collection_name=name)
 
-        # Parse the header
-        header = fits.getheader(filename)
-        parsed_header = fits_header_translator.parse_header(header)
-        parsed_header["filename"] = filename
+    # Make and start FileIngestor object
+    ing = FileIngestor(directory=dir, config=config, exposure_collection=exposure_collection)
+    ing.start()
 
-        if screen:
-            parsed_header[METRIC_SUCCESS_FLAG] = True
+    i = 0
+    while i < 30:
+        if ing.status["processed"] == len(filenames):
+            break
+        time.sleep(1)
+        i += 1
 
-        # Insert the parsed header into the DB table
-        exposure_collection.insert_one(parsed_header)
+    ing.stop()
+
+    assert ing.status["processed"] == len(filenames)
+    assert ing.status["failed"] == 0
+    assert len(exposure_collection.find()) == len(filenames)
+    assert set(exposure_collection.find(key="filename")) == set(filenames)
+    assert len(exposure_collection.find(screen=True)) == len(filenames)
 
     return exposure_collection
 

@@ -93,10 +93,10 @@ refcat:
 quality:
   raw:
     science:
-      quality:
+      metrics:
         has_wcs: true
     flat:
-      quality:
+      metrics:
         flip_asymm_h:
           less_than: 100
         flip_asymm_v:
@@ -108,3 +108,5 @@ quality:
 pyro:
   host: localhost
   port: 6563
+  refcat:
+    name: "refcat"

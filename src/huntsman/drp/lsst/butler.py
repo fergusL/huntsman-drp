@@ -1,5 +1,4 @@
 import os
-import gc
 import shutil
 from contextlib import suppress
 from tempfile import TemporaryDirectory
@@ -11,10 +10,8 @@ from lsst.daf.persistence.policy import Policy
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.lsst import tasks
 from huntsman.drp.collection import MasterCalibCollection
-from huntsman.drp.refcat import RefcatClient
 from huntsman.drp.utils.date import date_to_ymd, current_date_ymd
 import huntsman.drp.lsst.utils.butler as utils
-from huntsman.drp.fitsutil import read_fits_header
 from huntsman.drp.lsst.utils.coadd import get_skymap_ids
 from huntsman.drp.utils.calib import get_calib_filename
 
@@ -60,7 +57,6 @@ class ButlerRepository(HuntsmanBase):
             self._refcat_filename = None
         else:
             self._refcat_filename = os.path.join(self.butler_dir, "refcat_raw", "refcat_raw.csv")
-        self._refcat_client = None
 
         if calib_collection is None:
             calib_collection = MasterCalibCollection(config=self.config, logger=self.logger)
@@ -352,46 +348,6 @@ class ButlerRepository(HuntsmanBase):
             # Ingest the master calibs for this datasetType
             self.ingest_master_calibs(datasetType, filenames_to_ingest, validity=validity)
 
-    def make_reference_catalogue(self, ingest=True, **kwargs):
-        """ Make the reference catalogue for the ingested science frames.
-        TODO: Move this out of the butler repository class.
-        Args:
-            ingest (bool, optional): If True (default), ingest refcat into butler repo.
-        """
-        butler = self.get_butler(**kwargs)
-
-        ra_list = []
-        dec_list = []
-
-        # Get the filenames of ingested images
-        dataIds = self.get_dataIds("raw")
-
-        if len(dataIds) == 0:
-            raise RuntimeError("No science images to make reference catalogue with.")
-
-        for dataId in dataIds:
-
-            filename = self.get_filename("raw", dataId)
-            dataType = butler.queryMetadata("raw", ["dataType"], dataId=dataId)[0]
-
-            # Only select science files
-            if dataType != "science":
-                continue
-
-            header = read_fits_header(filename, ext="all")  # Use all as .fz extension is lost
-            ra_list.append(header[self._ra_key])
-            dec_list.append(header[self._dec_key])
-
-        self.logger.debug(f"Creating reference catalogue for {len(ra_list)} science frame(s).")
-
-        # Make the reference catalogue
-        self._refcat_client.make_reference_catalogue(ra_list, dec_list,
-                                                     filename=self._refcat_filename)
-
-        # Ingest into the repository
-        if ingest:
-            self.ingest_reference_catalogue(filenames=(self._refcat_filename,))
-
     def make_calexps(self, rerun="default", **kwargs):
         """ Make calibrated exposures (calexps) using the LSST stack.
         Args:
@@ -491,9 +447,6 @@ class ButlerRepository(HuntsmanBase):
 
     def _initialise(self):
         """Initialise a new butler repository."""
-        # Create the refcat client
-        # This is a thread-safe implementation of the TapReferenceCatalogue
-        self._refcat_client = RefcatClient(config=self.config, logger=self.logger)
 
         # Add the mapper file to each subdirectory, making directory if necessary
         for subdir in ["", "CALIB"]:
@@ -603,10 +556,6 @@ class TemporaryButlerRepository(ButlerRepository):
         self._tempdir.cleanup()
         self.butler_dir = None
         self._refcat_filename = None
-
-        # This *shouldn't* be necessary but seems like it might be...
-        self._refcat_client._proxy._pyroRelease()
-        gc.collect()
 
     @property
     def calib_dir(self):

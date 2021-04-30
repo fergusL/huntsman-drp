@@ -207,7 +207,7 @@ class ProcessQueue(HuntsmanBase, ABC):
             for thread in self._threads:
                 with suppress(RuntimeError):
                     thread.join()
-        self.logger.info(f"{self} stopped.")
+            self.logger.info(f"{self} stopped.")
 
     @abstractmethod
     def _get_objs(self):

@@ -1,54 +1,67 @@
+from contextlib import suppress
+
 from astropy import stats
 from astropy.wcs import WCS
 from panoptes.utils.images.fits import get_solve_field
-from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header
 
+from huntsman.drp.fitsutil import FitsHeaderTranslator
+
+# TODO: Move this to config?
 RAW_METRICS = ("get_wcs", "clipped_stats", "flipped_asymmetry")
 
 
-def get_wcs(filename, timeout=60, downsample=4, radius=5, **kwargs):
+def get_wcs(filename, header, timeout=60, downsample=4, radius=5, remake_wcs=False, **kwargs):
     """Function to call get_solve_field on a file and verify if a WCS solution could be found.
     Args:
         filename (str): The filename.
         timeout (int, optional): How long to try and solve in seconds. Defaults to 60.
         downsample (int, optional): Downsample image by this factor. Defaults to 4.
         radius (int, optional): Search radius around mount Ra and Dec coords. Defaults to 5.
+        remake_wcs (bool, optional): If True, remake WCS even if it already exists. Default False.
     Returns:
         dict: dictionary containing metadata.
     """
-    has_wcs = False
+    # Skip if dataType is not science
+    # TODO: Move this logic outside this function
+    parsed_header = FitsHeaderTranslator().parse_header(header)
+    if parsed_header['dataType'] != "science":
+        return {"has_wcs": False}
 
-    # Create list of args to pass to solve_field
-    solve_kwargs = {'--cpulimit': str(timeout),
-                    '--downsample': downsample}
+    # If there is already a WCS then don't make another one unless remake_wcs=True
+    make_wcs = True
+    with suppress(Exception):
+        make_wcs = not WCS(header).has_celestial
 
-    # try and get the Mount RA/DEC info to speed up the solve
-    try:
-        hdr = read_fits_header(filename)
-        parsed_hdr = FitsHeaderTranslator().parse_header(hdr)
-        ra = hdr.get('RA-MNT')
-        dec = hdr.get('DEC-MNT')
-    except KeyError:
-        pass
+    # Make the WCS if it doesn't already exist
+    if make_wcs or remake_wcs:
+        # Create dict of args to pass to solve_field
+        solve_kwargs = {'--cpulimit': str(timeout),
+                        '--downsample': downsample}
 
-    if 'ra' and 'dec' in vars():
-        solve_kwargs['--ra'] = ra
-        solve_kwargs['--dec'] = dec
-        solve_kwargs['--radius'] = radius
+        # Try and get the Mount RA/DEC info to speed up the solve
+        if ("RA-MNT" in header) and ("DEC-MNT" in header):
+            solve_kwargs['--ra'] = header["RA-MNT"]
+            solve_kwargs['--dec'] = header["DEC-MNT"]
+            solve_kwargs['--radius'] = radius
 
-    # if file is not a science exposure, skip
-    if parsed_hdr['dataType'] != "science":
-        return {"has_wcs": has_wcs}
-
-    # now solve for wcs
-    try:
+        # Solve for wcs
         get_solve_field(filename, **solve_kwargs)
-    except Exception:
-        pass
 
-    # finally check if the header now contians a wcs solution
-    wcs = WCS(read_fits_header(filename))
-    return {"has_wcs": wcs.has_celestial}
+    # Check if the header now contians a wcs solution
+    wcs = WCS(header)
+    has_wcs = wcs.has_celestial
+
+    result = {"has_wcs": has_wcs}
+
+    # Calculate the central sky coordinates
+    if has_wcs:
+        x0_pix = header["NAXIS1"] / 2
+        y0_pix = header["NAXIS2"] / 2
+        coord = wcs.pixel_to_world(x0_pix, y0_pix)
+        result["ra_centre"] = coord.ra.to_value("deg")
+        result["dec_centre"] = coord.dec.to_value("deg")
+
+    return result
 
 
 def clipped_stats(filename, data, header):

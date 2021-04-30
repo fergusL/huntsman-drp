@@ -30,7 +30,7 @@ def _process_file(filename, metric_names, exposure_collection, **kwargs):
 
     # Get the metrics
     metrics, success = _get_raw_metrics(filename, metric_names=metric_names, logger=logger)
-    to_update = {METRIC_SUCCESS_FLAG: success, "quality": metrics}
+    to_update = {METRIC_SUCCESS_FLAG: success, "metrics": metrics}
 
     # Update the document (upserting if necessary)
     to_update.update(parsed_header)

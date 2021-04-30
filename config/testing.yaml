@@ -20,3 +20,7 @@ exposure_sequence:
   saturate: 4096  # ADU
   bias: 32  # ADU
   pixel_size: 1.2  # Arcseconds per pixel
+
+pyro:
+  refcat:
+    name: test_refcat
