@@ -60,7 +60,14 @@ class Document(abc.Mapping):
         return len(self._document)
 
     def __str__(self):
-        return str({k: self._document[k] for k in self._required_keys})
+        if self._required_keys:
+            return str({k: self._document[k] for k in self._required_keys})
+        return str(self._document)
+
+    def __repr__(self):
+        if self._required_keys:
+            return repr({k: self._document[k] for k in self._required_keys})
+        return repr(self._document)
 
     # Public methods
 

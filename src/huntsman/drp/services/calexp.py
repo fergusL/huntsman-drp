@@ -86,25 +86,20 @@ def _process_document(document, exposure_collection, calib_collection, timeout, 
         # Make the calexp
         logger.debug(f"Making calexp for {document}")
         br.make_calexps(timeout=timeout)
-        required_keys = br.get_keys("raw")
 
-        # Retrieve the calexp objects and their data IDs
-        calexps, dataIds = br.get_calexps(extra_keys=required_keys)
+        # Retrieve the calexp object from the butler repository
+        calexps = br.get_calexps()[0]
         if len(calexps) != 1:
             raise RuntimeError(f"Unexpected number of calexps: {len(ingested_docs)}")
-
         calexp = calexps[0]
-        calexpId = dataIds[0]
 
-        # Evaluate metrics and insert into the database
+        # Evaluate calexp metrics
         logger.debug(f"Calculating metrics for {document}")
-
         metrics = _get_quality_metrics(calexp)
 
-        # Make the document and update the DB
-        document_filter = {k: calexpId[k] for k in required_keys}
+        # Update the existing document with calexp metrics
         to_update = {"metrics": {"calexp": metrics}}
-        exposure_collection.update_one(document_filter, to_update=to_update)
+        exposure_collection.update_one(document_filter=document, to_update=to_update)
 
 
 class CalexpQualityMonitor(ProcessQueue):
