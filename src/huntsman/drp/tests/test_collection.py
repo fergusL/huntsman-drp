@@ -28,7 +28,8 @@ def test_datatable_query_by_date(exposure_collection, fits_header_translator):
     date_end = dates_unique[-1]
     for date_start in dates_unique[:-1]:
         # Get filenames between dates
-        filenames = exposure_collection.find(key="filename", date_start=date_start, date_end=date_end)
+        filenames = exposure_collection.find(key="filename", date_start=date_start,
+                                             date_end=date_end)
         assert len(filenames) <= n_files  # This holds because we sorted the dates
         n_files = len(filenames)
         for filename in filenames:
@@ -116,3 +117,34 @@ def test_quality_filter(exposure_collection):
     exposure_collection.config["quality"]["raw"]["dark"] = cond
     matches = exposure_collection.find(document_filter, quality_filter=True)
     assert len(matches) == 0
+
+
+def test_insert_duplicate(exposure_collection):
+    """ Check an exception is raised when inserting a duplicate document. """
+
+    doc = exposure_collection.find()[0]
+
+    with pytest.raises(RuntimeError):
+        exposure_collection.insert_one(doc)
+
+
+def test_ingest_duplicate_fpack(exposure_collection):
+    """ Check an exception is raised when inserting duplicate .fits/.fz document. """
+
+    doc = exposure_collection.find()[0]
+
+    doc1 = doc._document.copy()
+    doc1["filename"] = "test_insert_duplicate.fits"
+
+    doc2 = doc._document.copy()
+    doc2["filename"] = "test_insert_duplicate.fits.fz"
+
+    exposure_collection.insert_one(doc1)
+    with pytest.raises(RuntimeError):
+        exposure_collection.insert_one(doc2)
+
+    exposure_collection.delete_many(exposure_collection.find(), force=True)
+
+    exposure_collection.insert_one(doc2)
+    with pytest.raises(RuntimeError):
+        exposure_collection.insert_one(doc1)

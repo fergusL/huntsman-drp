@@ -17,14 +17,14 @@ from huntsman.drp.utils.calib import get_calib_filename
 
 
 class ButlerRepository(HuntsmanBase):
+
     _mapper = "lsst.obs.huntsman.HuntsmanMapper"
     _policy_filename = Policy.defaultPolicyFile("obs_huntsman", "HuntsmanMapper.yaml",
                                                 relativePath="policy")
-    _ra_key = "RA-MNT"
-    _dec_key = "DEC-MNT"  # TODO: Move to config
 
     def __init__(self, directory, calib_dir=None, initialise=True, calib_collection=None,
-                 min_dataIds_per_calib=1, max_dataIds_per_calib=50, **kwargs):
+                 min_dataIds_per_calib=1, max_dataIds_per_calib=50, calib_validity=1000,
+                 **kwargs):
         """
         Args:
             directory (str): The path of the butler reposity.
@@ -49,7 +49,7 @@ class ButlerRepository(HuntsmanBase):
             calib_dir = os.path.join(self.butler_dir, "CALIB")
         self._calib_dir = calib_dir
 
-        self._calib_validity = self.config["calibs"]["validity"]
+        self._calib_validity = calib_validity
         self._min_dataIds_per_calib = min_dataIds_per_calib
         self._max_dataIds_per_calib = max_dataIds_per_calib
 
@@ -107,18 +107,18 @@ class ButlerRepository(HuntsmanBase):
             self._butlers[rerun] = dafPersist.Butler(inputs=butler_dir)
         return self._butlers[rerun]
 
-    def get(self, datasetType, data_id=None, rerun=None, **kwargs):
+    def get(self, datasetType, dataId=None, rerun=None, **kwargs):
         """ Get a dataset from the butler repository.
         Args:
             datasetType (str): The dataset type (raw, flat, bias etc.).
-            data_id (dict): The data ID that uniquely specifies a file.
+            dataId (dict): The data ID that uniquely specifies a file.
             rerun (str, optional): The rerun name. If None (default), will use the root butler
                 directory.
         Returns:
             object: The dataset.
         """
         butler = self.get_butler(rerun=rerun)
-        return butler.get(datasetType, dataId=data_id, **kwargs)
+        return butler.get(datasetType, dataId=dataId, **kwargs)
 
     def get_keys(self, datasetType, **kwargs):
         """ Get set of keys required to uniquely identify ingested data.
@@ -130,25 +130,25 @@ class ButlerRepository(HuntsmanBase):
         butler = self.get_butler(**kwargs)
         return list(butler.getKeys(datasetType))
 
-    def get_filename(self, datasetType, data_id, **kwargs):
+    def get_filename(self, datasetType, dataId, **kwargs):
         """ Get the filename for a data ID of data type.
         Args:
             datasetType (str): The dataset type (raw, flat, bias etc.).
-            data_id (dict): The data ID that uniquely specifies a file.
+            dataId (dict): The data ID that uniquely specifies a file.
         Returns:
             str: The filename.
         """
-        return self.get(datasetType + "_filename", data_id=data_id, **kwargs)[0]
+        return self.get(datasetType + "_filename", dataId=dataId, **kwargs)[0]
 
-    def get_metadata(self, datasetType, keys, data_id=None, **kwargs):
+    def get_metadata(self, datasetType, keys, dataId=None, **kwargs):
         """ Get metadata for a dataset.
         Args:
             datasetType (str): The dataset type (e.g. raw, flat, calexp).
             keys (list of str): The keys contained in the metadata.
-            data_id (optional): A list of dataIds to query on.
+            dataId (optional): A list of dataIds to query on.
         """
         butler = self.get_butler(**kwargs)
-        md = butler.queryMetadata(datasetType, format=keys, dataId=data_id)
+        md = butler.queryMetadata(datasetType, format=keys, dataId=dataId)
 
         if len(keys) == 1:  # Butler doesn't return a consistent data structure if len(keys)=1
             return [{keys[0]: _} for _ in md]
@@ -184,14 +184,14 @@ class ButlerRepository(HuntsmanBase):
 
         return metadata_list
 
-    def get_dataIds(self, datasetType, data_id=None, extra_keys=None, **kwargs):
-        """ Get ingested data_ids for a given datasetType.
+    def get_dataIds(self, datasetType, dataId=None, extra_keys=None, **kwargs):
+        """ Get ingested dataIds for a given datasetType.
         Args:
             datasetType (str): The datasetType (raw, bias, flat etc.).
-            data_id (dict, optional): A complete or partial data_id to match with.
-            extra_keys (list, optional): List of additional keys to be included in the data_ids.
+            dataId (dict, optional): A complete or partial dataId to match with.
+            extra_keys (list, optional): List of additional keys to be included in the dataIds.
         Returns:
-            list of dict: A list of data_ids.
+            list of dict: A list of dataIds.
         """
         butler = self.get_butler(**kwargs)
 
@@ -199,10 +199,10 @@ class ButlerRepository(HuntsmanBase):
         if extra_keys is not None:
             keys.extend(extra_keys)
 
-        return self.get_metadata(datasetType, keys=keys, data_id=data_id)
+        return self.get_metadata(datasetType, keys=keys, dataId=dataId)
 
-    def get_calexp_data_ids(self, rerun="default", filter_name=None, **kwargs):
-        """ Convenience function to get data_ids for calexps.
+    def get_calexp_dataIds(self, rerun="default", filter_name=None, **kwargs):
+        """ Convenience function to get dataIds for calexps.
         Args:
             rerun (str, optional): The rerun name. Default: "default".
             filter_name (str, optional): If given, only return data Ids for this filter.
@@ -210,27 +210,27 @@ class ButlerRepository(HuntsmanBase):
         Returns:
             list of dict: The list of dataIds.
         """
-        data_id = {"dataType": "science"}
+        dataId = {"dataType": "science"}
         if filter_name is not None:
-            data_id["filter"] = filter_name
+            dataId["filter"] = filter_name
 
-        return self.get_dataIds("calexp", data_id=data_id, rerun=rerun, **kwargs)
+        return self.get_dataIds("calexp", dataId=dataId, rerun=rerun, **kwargs)
 
     def get_calexps(self, rerun="default", **kwargs):
         """ Convenience function to get the calexps produced in a given rerun.
         Args:
             rerun (str, optional): The rerun name. Default: "default".
-            **kwargs: Parsed to self.get_calexp_data_ids.
+            **kwargs: Parsed to self.get_calexp_dataIds.
         Returns:
             list of lsst.afw.image.exposure: The list of calexp objects.
         """
-        data_ids = self.get_calexp_data_ids(rerun=rerun, **kwargs)
+        dataIds = self.get_calexp_dataIds(rerun=rerun, **kwargs)
 
-        calexps = [self.get("calexp", data_id=d, rerun=rerun) for d in data_ids]
-        if len(calexps) != len(data_ids):
-            raise RuntimeError("Number of data_ids does not match the number of calexps.")
+        calexps = [self.get("calexp", dataId=d, rerun=rerun) for d in dataIds]
+        if len(calexps) != len(dataIds):
+            raise RuntimeError("Number of dataIds does not match the number of calexps.")
 
-        return calexps, data_ids
+        return calexps, dataIds
 
     # Ingesting
 
@@ -354,19 +354,19 @@ class ButlerRepository(HuntsmanBase):
             rerun (str, optional): The name of the rerun. Default is "default".
             procs (int, optional): Run on this many processes (default 1).
         """
-        # Get data_ids for the raw science frames
-        data_ids = self.get_dataIds(datasetType="raw", data_id={'dataType': "science"},
-                                    extra_keys=["filter"])
+        # Get dataIds for the raw science frames
+        dataIds = self.get_dataIds(datasetType="raw", dataId={'dataType': "science"},
+                                   extra_keys=["filter"])
 
-        self.logger.info(f"Making calexp(s) from {len(data_ids)} data_id(s).")
+        self.logger.info(f"Making calexp(s) from {len(dataIds)} dataId(s).")
 
         # Process the science frames
-        tasks.make_calexps(data_ids, rerun=rerun, butler_dir=self.butler_dir,
+        tasks.make_calexps(dataIds, rerun=rerun, butler_dir=self.butler_dir,
                            calib_dir=self.calib_dir, **kwargs)
 
         # Check if we have the right number of calexps
-        if not len(self.get_calexps(rerun=rerun)[0]) == len(data_ids):
-            raise RuntimeError("Number of calexps does not match the number of data_ids.")
+        if not len(self.get_calexps(rerun=rerun)[0]) == len(dataIds):
+            raise RuntimeError("Number of calexps does not match the number of dataIds.")
 
     def make_coadd(self, filter_names=None, rerun="default:coadd", **kwargs):
         """ Make a coadd from all the calexps in this repository.
@@ -388,7 +388,7 @@ class ButlerRepository(HuntsmanBase):
 
         # Process all filters if filter_names is not provided
         if filter_names is None:
-            md = self.get_metadata("calexp", keys=["filter"], data_id={"dataType": "science"})
+            md = self.get_metadata("calexp", keys=["filter"], dataId={"dataType": "science"})
             filter_names = list(set([_["filter"] for _ in md]))
 
         self.logger.info(f"Creating coadd in {len(filter_names)} filter(s).")
@@ -421,13 +421,13 @@ class ButlerRepository(HuntsmanBase):
         """
         for datasetType in self.config["calibs"]["types"]:
 
-            # Retrieve filenames and data_ids for all files of this type
-            data_ids, filenames = utils.get_files_of_type(f"calibrations.{datasetType}",
-                                                          directory=self.calib_dir,
-                                                          policy=self._policy)
+            # Retrieve filenames and dataIds for all files of this type
+            dataIds, filenames = utils.get_files_of_type(f"calibrations.{datasetType}",
+                                                         directory=self.calib_dir,
+                                                         policy=self._policy)
             self.logger.info(f"Archiving {len(filenames)} master {datasetType} files.")
 
-            for metadata, filename in zip(data_ids, filenames):
+            for metadata, filename in zip(dataIds, filenames):
 
                 metadata["datasetType"] = datasetType
 
@@ -521,9 +521,9 @@ class ButlerRepository(HuntsmanBase):
             for tract_id, patch_ids in skymap_ids.items():
                 for patch_id in patch_ids:
 
-                    data_id = {"tract": tract_id, "patch": patch_id, "filter": filter_name}
+                    dataId = {"tract": tract_id, "patch": patch_id, "filter": filter_name}
                     try:
-                        butler.get("deepCoadd", dataId=data_id)
+                        butler.get("deepCoadd", dataId=dataId)
                     except Exception as err:
                         self.logger.error(f"Error encountered while verifying coadd: {err!r}")
                         raise err

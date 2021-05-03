@@ -18,7 +18,6 @@ class Collection(HuntsmanBase):
     """ This class is used to interface with the mongodb. It is responsible for performing queries
     and inserting/updating/deleting documents, as well as validating new documents.
     """
-    _unique_columns = "filename",  # Required to identify a unique document
 
     def __init__(self, collection_name, **kwargs):
         super().__init__(**kwargs)
@@ -37,17 +36,14 @@ class Collection(HuntsmanBase):
 
     # Public methods
 
-    def count_documents(self, document_filter=None):
-        """ Count the number of documents (matching document_filter criteria) in table.
+    def count_documents(self, *args, **kwargs):
+        """ Count the number of matching documents in the collection.
         Args:
-            document_filter (dict, optional): A dictionary containing key, value pairs to be matched
-            against other documents, by default None
+            *args, **kwargs: Parsed to self.find.
         Returns:
-            int: The number of matching documents in the table.
+            int: The number of matching documents in the collection.
         """
-        if document_filter is None:
-            document_filter = {}
-        return self._table.count_documents(document_filter)
+        return len(self.find(*args, **kwargs))
 
     def find(self, document_filter=None, date_start=None, date_end=None, date=None, key=None,
              screen=False, quality_filter=False):
@@ -131,10 +127,10 @@ class Collection(HuntsmanBase):
             overwrite (bool, optional): If True override any existing document, by default False.
         """
         # Check the required columns exist in the new document
-        document = self._document_type(document, copy=True)
-        document_id = document.get_mongo_id()
+        document = self._document_type(document, copy=True, config=self.config)
 
         # Check there is at most one match in the table
+        document_id = document.get_mongo_id()
         if self.find_one(document_filter=document_id):
             if overwrite:
                 self.update_one(document_id, to_update=document)
@@ -168,11 +164,9 @@ class Collection(HuntsmanBase):
 
         to_update = Document(to_update)
         to_update["date_modified"] = current_date()
-
-        mongo_filter = document_filter.to_mongo()
         mongo_update = to_update.to_mongo()
 
-        count = self._table.count_documents(mongo_filter)
+        count = self.count_documents(document_filter)
         if count > 1:
             raise RuntimeError(f"Multiple matches found for document in {self}: {document_filter}.")
 
@@ -199,7 +193,7 @@ class Collection(HuntsmanBase):
         mongo_filter = document_filter.to_mongo()
 
         if not force:
-            count = self._table.count_documents(mongo_filter)
+            count = self.count_documents(document_filter)
             if count > 1:
                 raise RuntimeError(f"Multiple matches found for document in {self}:"
                                    f" {document_filter}.")
@@ -280,6 +274,27 @@ class RawExposureCollection(Collection):
         super().__init__(collection_name=collection_name, **kwargs)
 
     # Public methods
+
+    def insert_one(self, document, *args, **kwargs):
+        """ Override to make sure the document does not clash with an fpacked version.
+        Args:
+            document (RawExposureDocument): The document to insert.
+            *args, **kwargs: Parsed to super().insert_one
+        Raises:
+            RuntimeError: If a .fz / .fits duplicate already exists.
+        """
+        doc = self._document_type(document, copy=True, config=self.config)
+        filename = doc["filename"]
+
+        if filename.endswith(".fits"):
+            if self.find({"filename": filename + ".fz"}):
+                raise RuntimeError(f"Tried to insert {filename} but a .fz version exists.")
+
+        elif filename.endswith(".fits.fz"):
+            if self.find({"filename": filename.strip(".fz")}):
+                raise RuntimeError(f"Tried to insert {filename} but a .fits version exists.")
+
+        return super().insert_one(document, *args, **kwargs)
 
     def get_matching_raw_calibs(self, calib_document, calib_date):
         """ Return matching set of calib IDs for a given data_id and calib_date.
