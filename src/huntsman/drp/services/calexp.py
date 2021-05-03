@@ -3,21 +3,9 @@ from functools import partial
 from multiprocessing.pool import ThreadPool
 
 from huntsman.drp.services.base import ProcessQueue
-from huntsman.drp.utils.library import load_module
 from huntsman.drp.lsst.butler import TemporaryButlerRepository
-from huntsman.drp.metrics.calexp import METRICS
 from huntsman.drp.refcat import RefcatClient
-
-
-def _get_quality_metrics(calexp):
-    """ Evaluate metrics for a single calexp. This could probably be improved in future.
-    TODO: Implement version control here.
-    """
-    result = {}
-    for metric in METRICS:
-        func = load_module(f"huntsman.drp.metrics.calexp.{metric}")
-        result[metric] = func(calexp)
-    return result
+from huntsman.drp.metrics.calexp import calculate_metrics
 
 
 def _process_document(document, exposure_collection, calib_collection, timeout, **kwargs):
@@ -95,7 +83,7 @@ def _process_document(document, exposure_collection, calib_collection, timeout, 
 
         # Evaluate calexp metrics
         logger.debug(f"Calculating metrics for {document}")
-        metrics = _get_quality_metrics(calexp)
+        metrics = calculate_metrics(calexp)
 
         # Update the existing document with calexp metrics
         to_update = {"metrics": {"calexp": metrics}}
