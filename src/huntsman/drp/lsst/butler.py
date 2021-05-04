@@ -418,6 +418,7 @@ class ButlerRepository(HuntsmanBase):
     def archive_master_calibs(self):
         """ Copy the master calibs from this Butler repository into the calib archive directory
         and insert the metadata into the master calib metadatabase.
+        TODO: Move this functionality out of the ButlerRepository class.
         """
         for datasetType in self.config["calibs"]["types"]:
 
@@ -441,7 +442,9 @@ class ButlerRepository(HuntsmanBase):
                 shutil.copy(filename, archived_filename)
 
                 # Insert the metadata into the calib database
-                self._calib_collection.insert_one(metadata, overwrite=True)
+                # Use replace operation with upsert because old document may already exist
+                document_filter = {"filename": filename}
+                self._calib_collection.replace_one(document_filter, metadata, upsert=True)
 
     # Private methods
 

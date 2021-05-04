@@ -7,7 +7,7 @@ from huntsman.drp.utils.date import current_date, parse_date
 from huntsman.drp.fitsutil import read_fits_header
 from huntsman.drp.collection import RawExposureCollection
 
-from pymongo.errors import ServerSelectionTimeoutError
+from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
 
 
 def test_mongodb_wrong_host_name(config):
@@ -124,7 +124,7 @@ def test_insert_duplicate(exposure_collection):
 
     doc = exposure_collection.find()[0]
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(DuplicateKeyError):
         exposure_collection.insert_one(doc)
 
 
@@ -140,11 +140,11 @@ def test_ingest_duplicate_fpack(exposure_collection):
     doc2["filename"] = "test_insert_duplicate.fits.fz"
 
     exposure_collection.insert_one(doc1)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(DuplicateKeyError):
         exposure_collection.insert_one(doc2)
 
     exposure_collection.delete_many(exposure_collection.find(), force=True)
 
     exposure_collection.insert_one(doc2)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(DuplicateKeyError):
         exposure_collection.insert_one(doc1)

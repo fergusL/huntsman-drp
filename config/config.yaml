@@ -59,6 +59,15 @@ mongodb:
   hostname: "localhost"
   port: 27017
   db_name: "huntsman"
+  collections:
+    RawExposureCollection:
+      name: "raw_exposures"
+      unique_keys:
+        - "filename"
+    MasterCalibCollection:
+      name: "master_calibs"
+      unique_keys:
+        - "filename"  # Let obs_huntsman handle unique calib file naming
 
 calibs:
   types:  # Order might be important...

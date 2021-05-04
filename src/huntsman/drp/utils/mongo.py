@@ -54,6 +54,30 @@ def _flatten_dict(d, parent_key=None, sep='.'):
     return dict(items)
 
 
+def unflatten_dict(d, sep="."):
+    """ Unflatten a flattened dictionary.
+    This is useful for inserting nested, encoded documents into collections.
+    Args:
+        d (dict): The dictionary to flatten.
+        sep (str, optional): Separater character, default: '.'.
+    Returns:
+        dict: The un-flattened (nested) dictionary.
+    """
+    result = {}
+    for k, v in d.items():
+        _unflatten_dict_split(k, v, result, sep=sep)
+    return result
+
+
+def _unflatten_dict_split(k, v, out, sep):
+    """ Utility function for unflatten_dict. """
+    k, *rest = k.split(sep, 1)
+    if rest:
+        _unflatten_dict_split(rest[0], v, out.setdefault(k, {}), sep=sep)
+    else:
+        out[k] = v
+
+
 def encode_mongo_document(value):
     """ Encode object for a pymongo query.
     Args:

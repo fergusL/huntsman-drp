@@ -7,7 +7,7 @@ from astropy import units as u
 
 from huntsman.drp.core import get_config
 from huntsman.drp.utils.date import parse_date
-from huntsman.drp.utils.mongo import encode_mongo_filter
+from huntsman.drp.utils.mongo import encode_mongo_filter, unflatten_dict
 
 
 class Document(abc.Mapping):
@@ -83,9 +83,12 @@ class Document(abc.Mapping):
     def update(self, d):
         self._document.update(d)
 
-    def to_mongo(self):
+    def to_mongo(self, flatten=True):
         """ Get the full mongo filter for the document """
-        return encode_mongo_filter(self._document)
+        d = encode_mongo_filter(self._document)
+        if not flatten:
+            return unflatten_dict(d)
+        return d
 
     def get_mongo_id(self):
         """ Get the unique mongo ID for the document """

@@ -85,13 +85,15 @@ def create_test_bulter_repository(directory, config=None, **kwargs):
     return br
 
 
-def create_test_exposure_collection(config, name="real_data"):
+def create_test_exposure_collection(config, name="real_data", clear=False):
     """ Ingest real testing images into a RawExposureCollection
     """
     dir = get_testdata_dir(config)
     filenames = get_testdata_fits_filenames(config)
 
     exposure_collection = RawExposureCollection(config=config, collection_name=name)
+    if clear:
+        exposure_collection.delete_all(really=True)
 
     # Make and start FileIngestor object
     ing = FileIngestor(directory=dir, config=config, exposure_collection=exposure_collection)

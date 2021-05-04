@@ -72,7 +72,7 @@ def test_ingest(exposure_collection, butler_repos, config):
 
 
 def test_make_master_calibs(exposure_collection, temp_butler_repo, config):
-    """ Make sure the correct number of master bias frames are produced."""
+    """ Make sure the correct number of master bias frames are produced. """
     test_config = config["exposure_sequence"]
     n_filters = len(test_config["filters"])
 
@@ -132,7 +132,7 @@ def test_make_master_calibs(exposure_collection, temp_butler_repo, config):
 
 
 def test_make_coadd(tmpdir):
-    """ Test that we can make coadds. """
+    """ Test that we can make coadds """
     br = create_test_bulter_repository(str(tmpdir))
 
     br.make_master_calibs(validity=1000)
