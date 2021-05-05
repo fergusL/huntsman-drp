@@ -1,5 +1,4 @@
 import time
-import numpy as np
 
 from huntsman.drp.services.calexp import CalexpQualityMonitor
 
@@ -31,9 +30,15 @@ def test_calexp_quality_monitor(exposure_collection_real_data, master_calib_coll
             assert "calexp" in md["metrics"].keys()
 
             for metric_value in md["metrics"]["calexp"].values():
-                assert np.isfinite(metric_value)
+                assert metric_value is not None
 
         assert m.status["failed"] == 0
     finally:
         m.stop()
         assert not m.is_running
+
+    # Test delete calexp metrics
+    exposure_collection_real_data.clear_calexp_metrics()
+    for md in exposure_collection_real_data.find({"dataType": "science"}):
+        exposure_collection_real_data.logger.info(f"{md._document}")
+        assert "calexp" not in md["metrics"].keys()

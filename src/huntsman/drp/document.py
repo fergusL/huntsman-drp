@@ -16,7 +16,7 @@ class Document(abc.Mapping):
     """
     _required_keys = set()
 
-    def __init__(self, document, validate=True, copy=False, **kwargs):
+    def __init__(self, document, validate=True, copy=False, unflatten=True, **kwargs):
         super().__init__()
 
         if document is None:
@@ -27,6 +27,9 @@ class Document(abc.Mapping):
 
         if copy:
             document = document.copy()
+
+        if unflatten:
+            document = unflatten_dict(document)
 
         # Check all the required information is present
         if validate and self._required_keys:
@@ -47,11 +50,11 @@ class Document(abc.Mapping):
     def __getitem__(self, key):
         return self._document[key]
 
-    def __setitem__(self, key, item):
-        self._document[key] = item
+    def __setitem__(self, key, value):
+        self._document.__setitem__(key, value)
 
-    def __delitem__(self, item):
-        del self._document[item]
+    def __delitem__(self, key):
+        self._document.__delitem__(key)
 
     def __iter__(self):
         return self._document.__iter__()
@@ -83,7 +86,7 @@ class Document(abc.Mapping):
     def update(self, d):
         self._document.update(d)
 
-    def to_mongo(self, flatten=True):
+    def to_mongo(self, flatten=False):
         """ Get the full mongo filter for the document """
         d = encode_mongo_filter(self._document)
         if not flatten:

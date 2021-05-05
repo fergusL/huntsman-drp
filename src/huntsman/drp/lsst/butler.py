@@ -85,6 +85,15 @@ class ButlerRepository(HuntsmanBase):
         # TODO: Information here about number of ingested files etc
         raise NotImplementedError
 
+    def document_to_dataId(self, document):
+        """ Extract an LSST dataId from a RawExposureDocument.
+        Args:
+            document (RawExposureDocument): The document to convert.
+        Returns:
+            dict: The corresponding dataId.
+        """
+        return {k: document[k] for k in self.get_keys("raw")}
+
     # Getters
 
     def get_butler(self, rerun=None):
@@ -348,11 +357,20 @@ class ButlerRepository(HuntsmanBase):
             # Ingest the master calibs for this datasetType
             self.ingest_master_calibs(datasetType, filenames_to_ingest, validity=validity)
 
+    def make_calexp(self, dataId, rerun="default", **kwargs):
+        """ Make calibrated exposure using the LSST stack.
+        Args:
+            rerun (str, optional): The name of the rerun. Default is "default".
+        """
+        self.logger.info(f"Making calexp for {dataId}.")
+
+        return tasks.make_calexp(dataId, rerun=rerun, butler_dir=self.butler_dir,
+                                 calib_dir=self.calib_dir, **kwargs)
+
     def make_calexps(self, rerun="default", **kwargs):
         """ Make calibrated exposures (calexps) using the LSST stack.
         Args:
             rerun (str, optional): The name of the rerun. Default is "default".
-            procs (int, optional): Run on this many processes (default 1).
         """
         # Get dataIds for the raw science frames
         dataIds = self.get_dataIds(datasetType="raw", dataId={'dataType': "science"},
@@ -361,8 +379,9 @@ class ButlerRepository(HuntsmanBase):
         self.logger.info(f"Making calexp(s) from {len(dataIds)} dataId(s).")
 
         # Process the science frames
-        tasks.make_calexps(dataIds, rerun=rerun, butler_dir=self.butler_dir,
-                           calib_dir=self.calib_dir, **kwargs)
+        for dataId in dataIds:
+            tasks.make_calexp(dataId, rerun=rerun, butler_dir=self.butler_dir,
+                              calib_dir=self.calib_dir, doReturnResults=False, **kwargs)
 
         # Check if we have the right number of calexps
         if not len(self.get_calexps(rerun=rerun)[0]) == len(dataIds):

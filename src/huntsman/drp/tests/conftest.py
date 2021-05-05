@@ -98,6 +98,8 @@ def exposure_collection(tmp_path_factory, config, fits_header_translator):
 
     # Populate the database
     exposure_collection = RawExposureCollection(config=config, collection_name="fake_data")
+    exposure_collection.delete_all(really=True)
+
     for filename, header in expseq.header_dict.items():
 
         # Parse the header
@@ -112,8 +114,7 @@ def exposure_collection(tmp_path_factory, config, fits_header_translator):
     yield exposure_collection
 
     # Remove the metadata from the DB ready for other tests
-    all_metadata = exposure_collection.find()
-    exposure_collection.delete_many(all_metadata)
+    exposure_collection.delete_all(really=True)
 
 
 @pytest.fixture(scope="function")
@@ -128,7 +129,9 @@ def exposure_collection_real_data(config, fits_header_translator):
     yield exposure_collection
 
     # Remove the metadata from the DB ready for other tests
+    exposure_collection.logger.info("Deleting all documents after test.")
     exposure_collection.delete_all(really=True)
+    assert not exposure_collection.find()
 
 
 @pytest.fixture(scope="function")
@@ -156,24 +159,27 @@ def master_calib_collection_real_data(exposure_collection_real_data, config):
 
 @pytest.fixture(scope="function")
 def tempdir_and_exposure_collection_with_uningested_files(
-        tmp_path_factory, config, fits_header_translator):
+        tmp_path_factory, config, exposure_collection, fits_header_translator):
     """
     Create a temporary directory populated with fake FITS images, then parse the images into the
     raw data table.
     """
+    # Clear the exposure collection of any existing documents
+    exposure_collection.delete_all(really=True)
+
     # Generate the fake data
     tempdir = tmp_path_factory.mktemp("dir_with_uningested_files")
     expseq = testing.FakeExposureSequence(config=config)
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database
-    exposure_collection = RawExposureCollection(config=config, collection_name="fake_data")
     n_stop = len(expseq.header_dict) * 0.7 // 1  # ingest ~70% of the files
     n = 0
     for filename, header in expseq.header_dict.items():
         if n >= n_stop:
             break
         n += 1
+
         # Parse the header
         parsed_header = fits_header_translator.parse_header(header)
         parsed_header["filename"] = filename
@@ -186,5 +192,4 @@ def tempdir_and_exposure_collection_with_uningested_files(
     yield (tempdir, exposure_collection)
 
     # Remove the metadata from the DB ready for other tests
-    all_metadata = exposure_collection.find()
-    exposure_collection.delete_many(all_metadata)
+    exposure_collection.delete_all(really=True)

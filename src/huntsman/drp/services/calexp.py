@@ -73,17 +73,11 @@ def _process_document(document, exposure_collection, calib_collection, timeout, 
 
         # Make the calexp
         logger.debug(f"Making calexp for {document}")
-        br.make_calexps(timeout=timeout)
+        task_result = br.make_calexp(dataId=br.document_to_dataId(document))
 
-        # Retrieve the calexp object from the butler repository
-        calexps = br.get_calexps()[0]
-        if len(calexps) != 1:
-            raise RuntimeError(f"Unexpected number of calexps: {len(ingested_docs)}")
-        calexp = calexps[0]
-
-        # Evaluate calexp metrics
+        # Evaluate metrics
         logger.debug(f"Calculating metrics for {document}")
-        metrics = calculate_metrics(calexp)
+        metrics = calculate_metrics(task_result)
 
         # Update the existing document with calexp metrics
         to_update = {"metrics": {"calexp": metrics}}

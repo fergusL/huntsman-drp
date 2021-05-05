@@ -2,13 +2,14 @@
 Eventually we should stop using these and call LSST functions directly.
 """
 import os
-import subprocess
+from contextlib import suppress
 
 from lsst.pipe.tasks.ingest import IngestTask
 from lsst.utils import getPackageDir
 
-from huntsman.drp.core import get_logger
-from huntsman.drp.lsst.ingest_refcat_task import HuntsmanIngestIndexedReferenceTask
+from huntsman.drp.lsst.utils.task import run_cmdline_task, run_cmdline_task_subprocess
+from huntsman.drp.lsst.tasks.ingestRefcat import HuntsmanIngestIndexedReferenceTask
+from huntsman.drp.lsst.tasks.processCcd import HuntsmanProcessCcdTask
 
 
 INGEST_CALIB_CONFIGS = {"bias": "ingestBias.py",
@@ -19,40 +20,6 @@ INGEST_CALIB_CONFIGS = {"bias": "ingestBias.py",
 MASTER_CALIB_SCRIPTS = {"bias": "constructBias.py",
                         "dark": "constructDark.py",
                         "flat": "constructFlat.py"}
-
-
-def run_command(cmd, logger=None, timeout=None):
-    """Run an LSST command line task.
-    Args:
-        cmd (str): The LSST commandline task to run in a subprocess.
-        logger (logger, optinal): The logger.
-        timeout (float, optional): The subprocess timeout in seconds. If None (default), no timeout
-            is applied.
-    Raises:
-        subprocess.CalledProcessError: If the subprocess return code is non-zero.
-        subprocess.TimeoutExpired: If the subprocess timeout is reached.
-    """
-    if logger is None:
-        logger = get_logger()
-    logger.debug(f"Running LSST command in subprocess: {cmd}")
-
-    with subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT) as proc:
-
-        # Log subprocess output in real time
-        with proc.stdout as pipe:
-            for line in iter(pipe.readline, b''):
-                logger.debug(line.decode().strip("\n"))
-
-        # Wait for subprocess to finish
-        returncode = proc.wait(timeout=timeout)
-
-    # Raise an error if the command failed
-    # This does not always seem to work as some LSST scripts always seem to exit 0
-    if returncode != 0:
-        raise subprocess.CalledProcessError(cmd=cmd, returncode=returncode)
-
-    return
 
 
 def ingest_raw_data(filenames, butler_dir, mode="link", ignore_ingested=True):
@@ -121,7 +88,7 @@ def ingest_master_calibs(datasetType, filenames, butler_dir, calib_dir, validity
     cmd += f" --configfile {config_file}"
 
     # Run the LSST command
-    run_command(cmd)
+    run_cmdline_task_subprocess(cmd)
 
 
 def make_master_calib(datasetType, calibId, dataIds, butler_dir, calib_dir, rerun, nodes=1,
@@ -151,17 +118,13 @@ def make_master_calib(datasetType, calibId, dataIds, butler_dir, calib_dir, reru
     cmd += " --doraise"  # We want the code to raise an error if there is a problem
 
     # Run the LSST script
-    return run_command(cmd)
+    return run_cmdline_task_subprocess(cmd)
 
 
-def make_calexps(data_ids, rerun, butler_dir, calib_dir, no_exit=False, procs=1,
-                 clobber_config=False, timeout=None):
-    """ Make calibrated exposures (calexps) using the LSST stack. These are astrometrically
-    and photometrically calibrated as well as background subtracted. There are several byproducts
-    of making calexps including sky background maps and preliminary source catalogues and metadata,
-    inclding photometric zeropoints.
+def make_calexp(dataId, rerun, butler_dir, calib_dir, procs=1, clobber_config=False, **kwargs):
+    """ Make calibrated exposures (calexps) using the LSST stack.
     Args:
-        data_ids : list of abc.Mapping
+        dataIds : list of abc.Mapping
             The data IDs of the science frames to process.
         rerun : str
             The name of the rerun.
@@ -169,29 +132,30 @@ def make_calexps(data_ids, rerun, butler_dir, calib_dir, no_exit=False, procs=1,
             The butler repository directory name.
         calib_dir : str
             The calib directory used by the butler repository.
-        no_exit : bool, optional
-            If True, the program will not exit if an error is raised by the stack. Default False.
         procs : int, optional
             The number of processes to use per node, by default 1.
         clobber_config : bool, optional
             Override config values, by default False.
-        timeout (float, optional): The subprocess timeout in seconds. If None (default), no timeout
-            is applied.
+        **kwargs: Parsed to run_cmdline_task.
+    Returns:
+        dict or None: The result of processCcd.py.
     """
-    cmd = f"processCcd.py {butler_dir}"
-    if no_exit:
-        cmd += " --noExit"
+    cmd = f"{butler_dir}"
     cmd += f" --rerun {rerun}"
     cmd += f" --calib {calib_dir}"
     cmd += f" -j {procs}"
-    for data_id in data_ids:
-        cmd += " --id"
-        for k, v in data_id.items():
-            cmd += f" {k}={v}"
+    cmd += " --id"
+    for k, v in dataId.items():
+        cmd += f" {k}={v}"
     if clobber_config:
         cmd += " --clobber-config"
 
-    run_command(cmd, timeout=timeout)
+    result = run_cmdline_task(HuntsmanProcessCcdTask, cmd.split(), **kwargs)
+
+    with suppress(AttributeError):  # If doReturnResults=True
+        return result.resultList[0].result.getDict()
+
+    return result
 
 
 def make_discrete_sky_map(butler_dir, calib_dir, rerun):
@@ -202,7 +166,7 @@ def make_discrete_sky_map(butler_dir, calib_dir, rerun):
         rerun (str): The rerun name.
     """
     cmd = f"makeDiscreteSkyMap.py {butler_dir} --calib {calib_dir} --id --rerun {rerun}"
-    run_command(cmd)
+    run_cmdline_task_subprocess(cmd)
 
 
 def make_coadd_temp_exp(butler_dir, calib_dir, rerun, tract_id, patch_ids, filter_name):
@@ -220,7 +184,7 @@ def make_coadd_temp_exp(butler_dir, calib_dir, rerun, tract_id, patch_ids, filte
     cmd += f" --id filter={filter_name}"
     cmd += f" tract={tract_id}"
     cmd += " patch=" + "^".join(patch_ids)
-    run_command(cmd)
+    run_cmdline_task_subprocess(cmd)
 
 
 def assemble_coadd(butler_dir, calib_dir, rerun, tract_id, patch_ids, filter_name):
@@ -237,4 +201,4 @@ def assemble_coadd(butler_dir, calib_dir, rerun, tract_id, patch_ids, filter_nam
     cmd += f" --id filter={filter_name}"
     cmd += f" tract={tract_id}"
     cmd += " patch=" + "^".join(patch_ids)
-    run_command(cmd)
+    run_cmdline_task_subprocess(cmd)
