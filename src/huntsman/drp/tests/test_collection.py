@@ -4,7 +4,7 @@ from datetime import timedelta
 import numpy as np
 
 from huntsman.drp.utils.date import current_date, parse_date
-from huntsman.drp.fitsutil import read_fits_header
+from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header
 from huntsman.drp.collection import RawExposureCollection
 
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
@@ -18,8 +18,10 @@ def test_mongodb_wrong_host_name(config):
         RawExposureCollection(config=modified_config)
 
 
-def test_datatable_query_by_date(exposure_collection, fits_header_translator):
+def test_datatable_query_by_date(exposure_collection, config):
     """ """
+    fits_header_translator = FitsHeaderTranslator(config=config)
+
     # Get list of all dates in the database
     dates = [d["dateObs"] for d in exposure_collection.find()]
     n_files = len(dates)

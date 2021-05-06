@@ -5,10 +5,10 @@ exposure_sequence:
   start_date: "2020-02-04"
   n_cameras: 2
   n_days: 2   # Simulate this number of nights
-  n_flat: 2   # Per (filter, camera) pair
-  n_bias: 2   # Per camera
-  n_dark: 2   # Per (exposure time, camera) pair
-  n_science: 1  # Per (camera, field, filter) combination
+  n_flat: 2   # Per (filter, camera) pair per night
+  n_bias: 2   # Per camera per night
+  n_dark: 2   # Per (exposure time, camera) pair per night
+  n_science: 1  # Per (camera, field, filter) combination per night
   exptime_flat: 30
   exptime_science: 60
   filters:

@@ -50,12 +50,13 @@ def test_refcat_client(config, testing_refcat_server, coords):
             df[ra_key].values.astype("float")
 
 
-def test_make_reference_catalogue(reference_catalogue, config, coords, ra_list, dec_list,
-                                  tolerance=0.2):
+def test_make_reference_catalogue(config, coords, ra_list, dec_list, tolerance=0.2):
+
+    refcat = rc.TapReferenceCatalogue(config=config)
 
     # Do the cone searches
     try:
-        df = reference_catalogue.make_reference_catalogue(coords)
+        df = refcat.make_reference_catalogue(coords)
     except HTTPError as err:
         pytest.skip(f"Encountered HTTPError while testing refcat: {err}")
     assert df.shape[0] != 0  # Make sure we have some sources

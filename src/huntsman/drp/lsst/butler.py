@@ -248,7 +248,10 @@ class ButlerRepository(HuntsmanBase):
         Args:
             filenames (iterable of str): The list of raw data filenames.
         """
+        filenames = set([os.path.abspath(os.path.realpath(_)) for _ in filenames])
+
         self.logger.debug(f"Ingesting {len(filenames)} file(s).")
+
         tasks.ingest_raw_data(filenames, butler_dir=self.butler_dir, **kwargs)
 
     def ingest_reference_catalogue(self, filenames):
@@ -266,6 +269,8 @@ class ButlerRepository(HuntsmanBase):
             filenames (list of str): The files to ingest.
             validity (int, optional): How many days the calibs remain valid for. Default 1000.
         """
+        filenames = set([os.path.abspath(os.path.realpath(_)) for _ in filenames])
+
         if len(filenames) == 0:
             self.logger.warning(f"No master {datasetType} files to ingest.")
             return

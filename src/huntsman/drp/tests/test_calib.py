@@ -5,34 +5,48 @@ from panoptes.utils.time import CountdownTimer
 from panoptes.utils import error
 
 from huntsman.drp.utils.testing import FakeExposureSequence
-from huntsman.drp.collection import RawExposureCollection
+from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
 from huntsman.drp.services.calib import MasterCalibMaker
 from huntsman.drp.utils.ingest import METRIC_SUCCESS_FLAG
+from huntsman.drp.fitsutil import FitsHeaderTranslator
 
 
 @pytest.fixture(scope="function")
 def config_lite(config):
     """ A config containing a smaller exposure sequence. """
-    config = config.copy()
     config["exposure_sequence"]["n_days"] = 1
     config["exposure_sequence"]["n_cameras"] = 1
     config["exposure_sequence"]["n_dark"] = 1
+    config["exposure_sequence"]["n_bias"] = 1
+    config["exposure_sequence"]["filters"] = ["g_band"]
     return config
 
 
 @pytest.fixture(scope="function")
-def exposure_collection_lite(tmp_path_factory, config_lite, fits_header_translator):
+def empty_calib_collection(config):
+    """ An empty master calib collection. """
+    col = MasterCalibCollection(config=config, collection_name="master_calib_test")
+    yield col
+
+    col.delete_all(really=True)
+
+
+@pytest.fixture(scope="function")
+def exposure_collection_lite(tmp_path_factory, config_lite):
     """
     Create a temporary directory populated with fake FITS images, then parse the images into the
     raw data table.
     """
+    fits_header_translator = FitsHeaderTranslator(config=config_lite)
+
     # Generate the fake data
     tempdir = tmp_path_factory.mktemp("test_exposure_sequence")
     expseq = FakeExposureSequence(config=config_lite)
     expseq.generate_fake_data(directory=tempdir)
 
     # Populate the database
-    exposure_collection = RawExposureCollection(config=config_lite, collection_name="fake_data_lite")
+    exposure_collection = RawExposureCollection(config=config_lite,
+                                                collection_name="fake_data_lite")
 
     for filename, header in expseq.header_dict.items():
 
@@ -54,8 +68,9 @@ def exposure_collection_lite(tmp_path_factory, config_lite, fits_header_translat
 
 
 @pytest.fixture(scope="function")
-def calib_maker(config, exposure_collection_lite):
-    calib_maker = MasterCalibMaker(config=config, exposure_collection=exposure_collection_lite)
+def calib_maker(config, exposure_collection_lite, empty_calib_collection):
+    calib_maker = MasterCalibMaker(config=config, exposure_collection=exposure_collection_lite,
+                                   calib_collection=empty_calib_collection)
     yield calib_maker
     calib_maker.stop()
 
