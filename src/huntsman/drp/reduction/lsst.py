@@ -8,11 +8,18 @@ class LsstDataReduction(DataReductionBase):
 
     """ Data reduction using LSST stack. """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, calexp_kwargs=None, coadd_kwargs=None, *args, **kwargs):
         super().__init__(initialise=False, *args, **kwargs)
 
         self._butler_directory = os.path.join(self.directory, "lsst")
         self._butler_repo = None
+
+        # Setup task configs
+
+        self._calexp_kwargs = {} if calexp_kwargs is None else calexp_kwargs
+        self._calexp_kwargs["procs"] = self.nproc
+
+        self._coadd_kwargs = {} if coadd_kwargs is None else coadd_kwargs
 
         self._initialise()
 
@@ -32,13 +39,12 @@ class LsstDataReduction(DataReductionBase):
         # Ingest reference catalogue
         self._butler_repo.ingest_reference_catalogue([self._refcat_filename])
 
-    def reduce(self, nproc=None):
+    def reduce(self):
         """ Use the LSST stack to calibrate and stack exposures. """
-        nproc = nproc if nproc else self.nproc
 
-        self._butler_repo.make_calexps(procs=nproc)
+        self._butler_repo.make_calexps(**self._calexp_kwargs)
 
-        self._butler_repo.make_coadd()
+        self._butler_repo.make_coadd(**self._coadd_kwargs)
 
     # Private methods
 

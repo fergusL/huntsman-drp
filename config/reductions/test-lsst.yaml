@@ -1,5 +1,6 @@
 type: huntsman.drp.reduction.lsst.LsstDataReduction
 name: example-reduction
+
 query:
   document_filter:
     dataType: science
@@ -10,3 +11,7 @@ query:
   screen: true
   quality_filter: true
   limit: 1
+
+calexp_kwargs:
+  extra_config:
+    charImage.background.algorithm: CONSTANT

@@ -2,7 +2,6 @@
 Eventually we should stop using these and call LSST functions directly.
 """
 import os
-from contextlib import suppress
 
 from lsst.pipe.tasks.ingest import IngestTask
 from lsst.utils import getPackageDir
@@ -138,7 +137,7 @@ def make_calexp(dataId, rerun, butler_dir, calib_dir, doReturnResults=True, **kw
 
 
 def make_calexps(dataIds, rerun, butler_dir, calib_dir, procs=1, clobber_config=False,
-                 doReturnResults=False, **kwargs):
+                 doReturnResults=False, extra_config=None, **kwargs):
     """ Make calibrated exposures (calexps) using the LSST stack.
     Args:
         dataIds (list of abc.Mapping): The data IDs of the science frames to process.
@@ -148,6 +147,7 @@ def make_calexps(dataIds, rerun, butler_dir, calib_dir, procs=1, clobber_config=
         procs (int, optional): The number of processes to use per node, by default 1.
         clobber_config (bool, optional): Override config values, by default False.
         doReturnResults (bool): If True, return results from LSST task. Default: False.
+        extra_config (dict, optional): Extra config items for the LSST task.
         **kwargs: Parsed to run_cmdline_task.
     Returns:
         dict or None: The result of HuntsmanProcessCcdTask.
@@ -162,6 +162,12 @@ def make_calexps(dataIds, rerun, butler_dir, calib_dir, procs=1, clobber_config=
     for dataId in dataIds:
         cmd += " --id"
         for k, v in dataId.items():
+            cmd += f" {k}={v}"
+
+    extra_config = {} if extra_config is None else extra_config
+    if extra_config:
+        cmd += " --config"
+        for k, v in extra_config.items():
             cmd += f" {k}={v}"
 
     result = run_cmdline_task(HuntsmanProcessCcdTask, cmd.split(), doReturnResults=doReturnResults,
