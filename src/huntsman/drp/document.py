@@ -4,9 +4,11 @@ from contextlib import suppress
 
 from astropy.coordinates import SkyCoord
 from astropy import units as u
+from astropy.wcs import WCS
 
 from huntsman.drp.core import get_config
 from huntsman.drp.utils.date import parse_date
+from huntsman.drp.fitsutil import read_fits_header
 from huntsman.drp.utils.mongo import encode_mongo_filter, unflatten_dict
 
 
@@ -132,6 +134,17 @@ class RawExposureDocument(Document):
         ra = self["metrics"]["ra_centre"] * u.deg
         dec = self["metrics"]["dec_centre"] * u.deg
         return SkyCoord(ra=ra, dec=dec)
+
+    def get_wcs(self):
+        """ Get the WCS object for this document.
+        Returns:
+            astropy.wcs.WCS: The WCS object.
+        """
+        # At the moment the easiest way is to read the FITS header again from file
+        # TODO: In the future we should be able to do this from the document metadata
+        header = read_fits_header(self["filename"])
+        wcs = WCS(header)
+        return wcs
 
 
 class CalibDocument(Document):

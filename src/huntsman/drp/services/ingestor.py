@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from huntsman.drp.services.base import ProcessQueue
 from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header, read_fits_data
-from huntsman.drp.utils.library import load_module
+from huntsman.drp.utils import load_module
 from huntsman.drp.metrics.raw import RAW_METRICS
 from huntsman.drp.utils.ingest import METRIC_SUCCESS_FLAG, list_fits_files_recursive
 

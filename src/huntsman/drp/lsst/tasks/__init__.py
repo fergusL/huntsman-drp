@@ -121,38 +121,53 @@ def make_master_calib(datasetType, calibId, dataIds, butler_dir, calib_dir, reru
     return run_cmdline_task_subprocess(cmd)
 
 
-def make_calexp(dataId, rerun, butler_dir, calib_dir, procs=1, clobber_config=False, **kwargs):
+def make_calexp(dataId, rerun, butler_dir, calib_dir, doReturnResults=True, **kwargs):
     """ Make calibrated exposures (calexps) using the LSST stack.
     Args:
-        dataIds : list of abc.Mapping
-            The data IDs of the science frames to process.
-        rerun : str
-            The name of the rerun.
-        butler_dir : str
-            The butler repository directory name.
-        calib_dir : str
-            The calib directory used by the butler repository.
-        procs : int, optional
-            The number of processes to use per node, by default 1.
-        clobber_config : bool, optional
-            Override config values, by default False.
+        dataId (abc.Mapping): The data ID of the science frame to process.
+        rerun (str): The name of the rerun.
+        butler_dir (str): The butler repository directory name.
+        calib_dir (str): The calib directory used by the butler repository.
+        doReturnResults (bool): If True (default), return results from LSST task.
+        **kwargs: Parsed to make_calexps.
+    Returns:
+        dict or None: The result of HuntsmanProcessCcdTask.
+    """
+    return make_calexps([dataId], rerun, butler_dir, calib_dir, doReturnResults=doReturnResults,
+                        **kwargs)
+
+
+def make_calexps(dataIds, rerun, butler_dir, calib_dir, procs=1, clobber_config=False,
+                 doReturnResults=False, **kwargs):
+    """ Make calibrated exposures (calexps) using the LSST stack.
+    Args:
+        dataIds (list of abc.Mapping): The data IDs of the science frames to process.
+        rerun (str): The name of the rerun.
+        butler_dir (str): The butler repository directory name.
+        calib_dir (str): The calib directory used by the butler repository.
+        procs (int, optional): The number of processes to use per node, by default 1.
+        clobber_config (bool, optional): Override config values, by default False.
+        doReturnResults (bool): If True, return results from LSST task. Default: False.
         **kwargs: Parsed to run_cmdline_task.
     Returns:
-        dict or None: The result of processCcd.py.
+        dict or None: The result of HuntsmanProcessCcdTask.
     """
     cmd = f"{butler_dir}"
     cmd += f" --rerun {rerun}"
     cmd += f" --calib {calib_dir}"
     cmd += f" -j {procs}"
-    cmd += " --id"
-    for k, v in dataId.items():
-        cmd += f" {k}={v}"
     if clobber_config:
         cmd += " --clobber-config"
 
-    result = run_cmdline_task(HuntsmanProcessCcdTask, cmd.split(), **kwargs)
+    for dataId in dataIds:
+        cmd += " --id"
+        for k, v in dataId.items():
+            cmd += f" {k}={v}"
 
-    with suppress(AttributeError):  # If doReturnResults=True
+    result = run_cmdline_task(HuntsmanProcessCcdTask, cmd.split(), doReturnResults=doReturnResults,
+                              **kwargs)
+
+    if doReturnResults:
         return result.resultList[0].result.getDict()
 
     return result

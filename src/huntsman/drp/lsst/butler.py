@@ -383,10 +383,9 @@ class ButlerRepository(HuntsmanBase):
 
         self.logger.info(f"Making calexp(s) from {len(dataIds)} dataId(s).")
 
-        # Process the science frames
-        for dataId in dataIds:
-            tasks.make_calexp(dataId, rerun=rerun, butler_dir=self.butler_dir,
-                              calib_dir=self.calib_dir, doReturnResults=False, **kwargs)
+        # Process the science frames in parallel using LSST taskRunner
+        tasks.make_calexps(dataIds, rerun=rerun, butler_dir=self.butler_dir,
+                           calib_dir=self.calib_dir, doReturnResults=False, **kwargs)
 
         # Check if we have the right number of calexps
         if not len(self.get_calexps(rerun=rerun)[0]) == len(dataIds):

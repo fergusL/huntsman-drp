@@ -1,16 +1,11 @@
 import os
 from loguru import logger as LOGGER
-import yaml
 from contextlib import suppress
 from collections import abc
 
+from huntsman.drp.utils import load_yaml
+
 FILE_LOG_LEVELS = ("DEBUG", "INFO", "WARNING")
-
-
-def _load_yaml(filename):
-    with open(filename, 'r') as f:
-        config = yaml.safe_load(f)
-    return config
 
 
 def _update_config(d, u):
@@ -44,17 +39,17 @@ def get_config(config_dir=None, ignore_local=False, parse=True, testing=False):
                        " Unable to determine config directory.")
     if config_dir is None:
         config_dir = os.path.join(os.environ["HUNTSMAN_DRP"], "config")
-    config = _load_yaml(os.path.join(config_dir, "config.yaml"))
+    config = load_yaml(os.path.join(config_dir, "config.yaml"))
 
     # Update the config with testing version
     if testing:
-        config_test = _load_yaml(os.path.join(config_dir, "testing.yaml"))
+        config_test = load_yaml(os.path.join(config_dir, "testing.yaml"))
         config = _update_config(config, config_test)
 
     # Update the config with local version
     if not ignore_local:
         with suppress(FileNotFoundError):
-            config_local = _load_yaml(os.path.join(config_dir, "config_local.yaml"))
+            config_local = load_yaml(os.path.join(config_dir, "config_local.yaml"))
             config = _update_config(config, config_local)
 
     # Parse the config

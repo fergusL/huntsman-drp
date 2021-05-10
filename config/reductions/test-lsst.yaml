@@ -1,0 +1,12 @@
+type: huntsman.drp.reduction.lsst.LsstDataReduction
+name: example-reduction
+query:
+  document_filter:
+    dataType: science
+    field: DoradoGroup-p0p0
+    filter:
+      in:
+        - g_band
+  screen: true
+  quality_filter: true
+  limit: 1

@@ -8,7 +8,7 @@ from lsst.afw.geom.ellipses import Quadrupole, SeparableDistortionTraceRadius
 
 from huntsman.drp.core import get_logger
 from huntsman.drp.utils.date import current_date
-from huntsman.drp.utils.library import load_module
+from huntsman.drp.utils import load_module
 
 
 METRICS = ("zeropoint", "psf", "background", "sourcecat")

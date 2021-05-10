@@ -55,7 +55,7 @@ class Collection(HuntsmanBase):
         return len(self.find(*args, **kwargs))
 
     def find(self, document_filter=None, date_start=None, date_end=None, date=None, key=None,
-             screen=False, quality_filter=False):
+             screen=False, quality_filter=False, limit=None):
         """Get data for one or more matches in the table.
         Args:
             document_filter (dict, optional): A dictionary containing key, value pairs to be
@@ -73,6 +73,7 @@ class Collection(HuntsmanBase):
                 Default False.
             quality_filter (bool, optional): If True, only return documents that satisfy quality
                 cuts. Default False.
+            limit (int): Limit the number of returned documents to this amount.
         Returns:
             result (list): List of DataIds or key values if key is specified.
         """
@@ -108,7 +109,10 @@ class Collection(HuntsmanBase):
         self.logger.debug(f"Performing mongo find operation with filter: {mongo_filter}.")
 
         documents = list(self._collection.find(mongo_filter, {"_id": False}))
+
         self.logger.debug(f"Find operation returned {len(documents)} results.")
+        if limit:
+            documents = documents[:limit]
 
         if key is not None:
             return [d[key] for d in documents]
