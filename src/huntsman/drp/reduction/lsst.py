@@ -1,10 +1,10 @@
 import os
 
-from huntsman.drp.reduction.base import DataReductionBase
+from huntsman.drp.reduction.base import ReductionBase
 from huntsman.drp.lsst.butler import ButlerRepository
 
 
-class LsstDataReduction(DataReductionBase):
+class LsstReduction(ReductionBase):
 
     """ Data reduction using LSST stack. """
 
@@ -25,9 +25,13 @@ class LsstDataReduction(DataReductionBase):
 
     # Methods
 
-    def prepare(self):
-        """ Override the prepare method to ingest the files into the butler repository. """
-        super().prepare()
+    def prepare(self, call_super=True):
+        """ Override the prepare method to ingest the files into the butler repository.
+        Args:
+            call_super (bool, optional): If True (default), call super method before other tasks.
+        """
+        if call_super:
+            super().prepare()
 
         # Ingest raw files into butler repository
         self._butler_repo.ingest_raw_data([d["filename"] for d in self.science_docs])
@@ -42,9 +46,13 @@ class LsstDataReduction(DataReductionBase):
     def reduce(self):
         """ Use the LSST stack to calibrate and stack exposures. """
 
-        self._butler_repo.make_calexps(**self._calexp_kwargs)
+        dataIds = [self._butler_repo.document_to_dataId(d) for d in self.science_docs]
 
-        self._butler_repo.make_coadd(**self._coadd_kwargs)
+        self.logger.info(f"Making calexps for {len(self.science_docs)} science images.")
+        self._butler_repo.make_calexps(dataIds=dataIds, **self._calexp_kwargs)
+
+        self.logger.info(f"Making coadds from {len(self.science_docs)} calexps.")
+        self._butler_repo.make_coadd(dataIds=dataIds, **self._coadd_kwargs)
 
     # Private methods
 

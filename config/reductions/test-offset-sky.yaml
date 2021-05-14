@@ -1,0 +1,34 @@
+type: huntsman.drp.reduction.offsetsky.OffsetSkyReduction
+name: example-offsetsky-reduction
+
+# This query is used to select science / target exposures
+query:
+  document_filter:
+    dataType: science
+    field: DoradoGroup-p0p0
+    filter:
+      in:
+        - g_band
+  screen: true
+  quality_filter: true
+  limit: 1
+
+# This query is used to select offset sky exposures
+sky_query:
+  document_filter:
+    dataType: science
+    field: DoradoGroup-p0p0_sky
+    filter:
+      in:
+        - g_band
+  screen: true
+  quality_filter: true
+  limit: 1
+
+# This is the maximum time difference between target and sky exposures
+timedelta_minutes: 60
+
+# This is where you put extra config items for the processing
+calexp_kwargs:
+  extra_config:
+    charImage.background.algorithm: CONSTANT

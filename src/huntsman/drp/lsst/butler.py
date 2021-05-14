@@ -1,3 +1,8 @@
+"""
+NOTES:
+ -  The correct way to create a Butler instance:
+    https://github.com/lsst/pipe_base/blob/master/python/lsst/pipe/base/argumentParser.py#L678
+"""
 import os
 import shutil
 from contextlib import suppress
@@ -13,7 +18,6 @@ from huntsman.drp.collection import MasterCalibCollection
 from huntsman.drp.utils.date import date_to_ymd, current_date_ymd
 import huntsman.drp.lsst.utils.butler as utils
 from huntsman.drp.lsst.utils.coadd import get_skymap_ids
-from huntsman.drp.utils.calib import get_calib_filename
 
 
 class ButlerRepository(HuntsmanBase):
@@ -98,6 +102,7 @@ class ButlerRepository(HuntsmanBase):
 
     def get_butler(self, rerun=None):
         """ Get a butler object for a given rerun.
+        We cache created butlers to avoid the overhead of having to re-create them each time.
         Args:
             rerun (str, optional): The rerun name. If None, the butler is created for the root
                 butler directory.
@@ -108,12 +113,25 @@ class ButlerRepository(HuntsmanBase):
             return self._butlers[rerun]
         except KeyError:
             self.logger.debug(f"Creating new butler object for rerun={rerun}.")
+
             if rerun is None:
                 butler_dir = self.butler_dir
             else:
                 butler_dir = os.path.join(self.butler_dir, "rerun", rerun)
             os.makedirs(butler_dir, exist_ok=True)
-            self._butlers[rerun] = dafPersist.Butler(inputs=butler_dir)
+
+            inputs = {"root": butler_dir}
+            outputs = {'root': butler_dir, 'mode': 'rw'}
+
+            if rerun:
+                outputs["cfgRoot"] = self.butler_dir
+
+            butler_kwargs = {"mapperArgs": {"calibRoot": self._calib_dir}}
+            inputs.update(butler_kwargs)
+            outputs.update(butler_kwargs)
+
+            self._butlers[rerun] = dafPersist.Butler(inputs=inputs, outputs=outputs)
+
         return self._butlers[rerun]
 
     def get(self, datasetType, dataId=None, rerun=None, **kwargs):
@@ -225,15 +243,17 @@ class ButlerRepository(HuntsmanBase):
 
         return self.get_dataIds("calexp", dataId=dataId, rerun=rerun, **kwargs)
 
-    def get_calexps(self, rerun="default", **kwargs):
-        """ Convenience function to get the calexps produced in a given rerun.
+    def get_calexps(self, dataIds=None, rerun="default", **kwargs):
+        """ Convenience function to get calexp objects for a given rerun.
         Args:
+            dataIds (list, optional): If provided, get calexps for these dataIds only.
             rerun (str, optional): The rerun name. Default: "default".
             **kwargs: Parsed to self.get_calexp_dataIds.
         Returns:
             list of lsst.afw.image.exposure: The list of calexp objects.
         """
-        dataIds = self.get_calexp_dataIds(rerun=rerun, **kwargs)
+        if dataIds is None:
+            dataIds = self.get_calexp_dataIds(rerun=rerun, **kwargs)
 
         calexps = [self.get("calexp", dataId=d, rerun=rerun) for d in dataIds]
         if len(calexps) != len(dataIds):
@@ -372,14 +392,19 @@ class ButlerRepository(HuntsmanBase):
         return tasks.make_calexp(dataId, rerun=rerun, butler_dir=self.butler_dir,
                                  calib_dir=self.calib_dir, **kwargs)
 
-    def make_calexps(self, rerun="default", **kwargs):
+    def make_calexps(self, dataIds=None, rerun="default", **kwargs):
         """ Make calibrated exposures (calexps) using the LSST stack.
         Args:
+            dataIds (list of dict): List of dataIds to process. If None (default), will process
+                all ingested science exposures.
             rerun (str, optional): The name of the rerun. Default is "default".
+            **kwargs: Parsed to `tasks.make_calexps`.
         """
         # Get dataIds for the raw science frames
-        dataIds = self.get_dataIds(datasetType="raw", dataId={'dataType': "science"},
-                                   extra_keys=["filter"])
+        # TODO: Remove extra keys as this should be taken care of by policy now
+        if dataIds is None:
+            dataIds = self.get_dataIds(datasetType="raw", dataId={'dataType': "science"},
+                                       extra_keys=["filter"])
 
         self.logger.info(f"Making calexp(s) from {len(dataIds)} dataId(s).")
 
@@ -388,26 +413,36 @@ class ButlerRepository(HuntsmanBase):
                            calib_dir=self.calib_dir, doReturnResults=False, **kwargs)
 
         # Check if we have the right number of calexps
-        if not len(self.get_calexps(rerun=rerun)[0]) == len(dataIds):
+        if not len(self.get_calexps(rerun=rerun, dataIds=dataIds)[0]) == len(dataIds):
             raise RuntimeError("Number of calexps does not match the number of dataIds.")
 
-    def make_coadd(self, filter_names=None, rerun="default:coadd", **kwargs):
+        self.logger.debug("Finished making calexps.")
+
+    def make_coadd(self, dataIds=None, filter_names=None, rerun="default:coadd", **kwargs):
         """ Make a coadd from all the calexps in this repository.
         See: https://pipelines.lsst.io/getting-started/coaddition.html
         Args:
             filter_names (list, optional): The list of filter names to process. If not given,
-                all filters will be processed.
+                all filters will be independently processed.
             rerun (str, optional): The rerun name. Default is "default:coadd".
+            dataIds (list, optional): The list of dataIds to process. If None (default), all files
+                will be processed.
         """
+        if dataIds is None:
+            dataIds = self.get_dataIds("raw")
+
         # Make the skymap in a chained rerun
+        # The skymap is a discretisation of the sky and defines the shapes and sizes of coadd tiles
         self.logger.info(f"Creating sky map with rerun: {rerun}.")
-        tasks.make_discrete_sky_map(self.butler_dir, calib_dir=self.calib_dir, rerun=rerun)
+        tasks.make_discrete_sky_map(self.butler_dir, calib_dir=self.calib_dir, rerun=rerun,
+                                    dataIds=dataIds)
 
         # Get the output rerun
         rerun_out = rerun.split(":")[-1]
 
         # Get the tract / patch indices from the skymap
-        skymap_ids = self._get_skymap_ids(rerun=rerun_out)
+        # A skymap ID consists of a tractId and associated patchIds
+        skymapIds = self._get_skymap_ids(rerun=rerun_out)
 
         # Process all filters if filter_names is not provided
         if filter_names is None:
@@ -417,56 +452,67 @@ class ButlerRepository(HuntsmanBase):
         self.logger.info(f"Creating coadd in {len(filter_names)} filter(s).")
 
         for filter_name in filter_names:
-            for tract_id, patch_ids in skymap_ids.items():  # TODO: Use multiprocessing
 
-                self.logger.debug(f"Warping calexps for tract {tract_id} in {filter_name} filter.")
+            self.logger.info(f"Creating coadd in {filter_name} filter from"
+                             f" {len(skymapIds)} tracts.")
 
-                task_kwargs = dict(butler_dir=self.butler_dir, calib_dir=self.calib_dir,
-                                   rerun=rerun_out, tract_id=tract_id,
-                                   patch_ids=patch_ids, filter_name=filter_name)
+            dataIds_filter = [d for d in dataIds if d["filter"] == filter_name]
 
-                # Warp the calexps onto skymap
-                tasks.make_coadd_temp_exp(**task_kwargs)
+            task_kwargs = dict(butler_dir=self.butler_dir, calib_dir=self.calib_dir,
+                               rerun=rerun_out, skymapIds=skymapIds, dataIds=dataIds_filter,
+                               filter_name=filter_name)
 
-                # Combine the warped calexps
-                tasks.assemble_coadd(**task_kwargs)
+            # Warp the calexps onto skymap
+            tasks.make_coadd_temp_exp(**task_kwargs)
+
+            # Combine the warped calexps
+            tasks.assemble_coadd(**task_kwargs)
 
         # Check all tracts and patches exist in each filter
-        self._verify_coadd(rerun=rerun_out, filter_names=filter_names)
+        self._verify_coadd(rerun=rerun_out, filter_names=filter_names, skymapIds=skymapIds)
 
         self.logger.info("Successfully created coadd.")
 
     # Archiving
 
-    def archive_master_calibs(self):
+    def archive_master_calibs(self, directory=None):
         """ Copy the master calibs from this Butler repository into the calib archive directory
         and insert the metadata into the master calib metadatabase.
         TODO: Move this functionality out of the ButlerRepository class.
         """
+        if not directory:
+            directory = self.calib_dir
+
+        archive_dir = self.config["directories"]["archive"]
+
         for datasetType in self.config["calibs"]["types"]:
 
             # Retrieve filenames and dataIds for all files of this type
             dataIds, filenames = utils.get_files_of_type(f"calibrations.{datasetType}",
-                                                         directory=self.calib_dir,
+                                                         directory=directory,
                                                          policy=self._policy)
+
             self.logger.info(f"Archiving {len(filenames)} master {datasetType} files.")
 
             for metadata, filename in zip(dataIds, filenames):
 
-                metadata["datasetType"] = datasetType
-
-                # Create the filename for the archived copy
-                archived_filename = get_calib_filename(config=self.config, **metadata)
-                metadata["filename"] = archived_filename
+                # Create the filename for the archived copy using LSST policy
+                # Strip off the dirname of the butler calib dir (+1 for /)
+                basename = filename[len(directory) + 1:]
+                archived_filename = os.path.join(archive_dir, basename)
 
                 # Copy the file into the calib archive, overwriting if necessary
                 self.logger.debug(f"Copying {filename} to {archived_filename}.")
                 os.makedirs(os.path.dirname(archived_filename), exist_ok=True)
                 shutil.copy(filename, archived_filename)
 
+                # Add extra keys to metadata for archiving
+                metadata["datasetType"] = datasetType
+                metadata["filename"] = archived_filename
+
                 # Insert the metadata into the calib database
                 # Use replace operation with upsert because old document may already exist
-                document_filter = {"filename": filename}
+                document_filter = {"filename": archived_filename}
                 self._calib_collection.replace_one(document_filter, metadata, upsert=True)
 
     # Private methods
@@ -525,12 +571,12 @@ class ButlerRepository(HuntsmanBase):
         Args:
             rerun (str): The rerun name.
         Returns:
-            dict: A dict of tract_id: [patch_ids].
+            dict: A dict of tractId: [patchIds].
         """
         skymap = self.get("deepCoadd_skyMap", rerun=rerun)
         return get_skymap_ids(skymap)
 
-    def _verify_coadd(self, filter_names, rerun):
+    def _verify_coadd(self, skymapIds, filter_names, rerun):
         """ Verify all the coadd patches exist and can be found by the Butler.
         Args:
             rerun (str): The rerun name.
@@ -541,13 +587,15 @@ class ButlerRepository(HuntsmanBase):
         self.logger.info("Verifying coadd.")
 
         butler = self.get_butler(rerun=rerun)
-        skymap_ids = self._get_skymap_ids(rerun=rerun)
 
         for filter_name in filter_names:
-            for tract_id, patch_ids in skymap_ids.items():
-                for patch_id in patch_ids:
+            for skymapId in skymapIds:
 
-                    dataId = {"tract": tract_id, "patch": patch_id, "filter": filter_name}
+                tractId = skymapId["tractId"]
+                patchIds = skymapId["patchIds"]
+
+                for patchId in patchIds:
+                    dataId = {"tract": tractId, "patch": patchId, "filter": filter_name}
                     try:
                         butler.get("deepCoadd", dataId=dataId)
                     except Exception as err:

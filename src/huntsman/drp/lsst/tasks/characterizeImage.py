@@ -2,55 +2,79 @@
 
 Changes:
 - Adds try except statement around PSF measurement. This allows the source catalogue to be written
-  in case it fails.
+  in case it fails, which is useful for finding out why.
+- Implements offset sky functionality.
 """
 import numpy as np
 
-
 import lsst.pipe.base as pipeBase
+import lsst.pex.config as pexConfig
 from lsst.obs.base import ExposureIdInfo
 from lsst.afw.math import BackgroundList
 from lsst.afw.table import SourceTable, IdFactory
 from lsst.pex.exceptions import LengthError
-from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
+from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask, CharacterizeImageConfig
+
+
+class HuntsmanCharacterizeImageConfig(CharacterizeImageConfig):
+    """ Override task config to add offset sky functionality. """
+
+    useOffsetSky = pexConfig.Field(dtype=bool,
+                                   default=False,
+                                   doc="Use offset sky for initial sky estiamte")
 
 
 class HuntsmanCharacterizeImageTask(CharacterizeImageTask):
 
+    ConfigClass = HuntsmanCharacterizeImageConfig  # Set as default config class
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    @pipeBase.timeMethod
+    def runDataRef(self, dataRef, exposure=None, background=None, doUnpersist=True):
+        """
+        Huntsman overrides:
+          - Get offset sky from butler and parse it to run method if config.useOffsetSky.
+        """
+        self._frame = self._initialFrame  # reset debug display frame
+        self.log.info("Processing %s" % (dataRef.dataId))
+
+        if doUnpersist:
+            if exposure is not None or background is not None:
+                raise RuntimeError("doUnpersist true; exposure and background must be None")
+            exposure = dataRef.get("postISRCCD", immediate=True)
+        elif exposure is None:
+            raise RuntimeError("doUnpersist false; exposure must be provided")
+
+        exposureIdInfo = dataRef.get("expIdInfo")
+
+        # This is a Huntsman modification
+        # Use the butler to obtain a ready-made offset sky background image
+        if self.config.useOffsetSky:
+            offset_sky_background = dataRef.get("offsetBackground")
+        else:
+            offset_sky_background = None
+
+        # Parse the offset sky background to the run method
+        charRes = self.run(exposure=exposure, exposureIdInfo=exposureIdInfo, background=background,
+                           offset_sky_background=offset_sky_background)
+
+        if self.config.doWrite:
+            dataRef.put(charRes.sourceCat, "icSrc")
+            if self.config.doWriteExposure:
+                dataRef.put(charRes.exposure, "icExp")
+                dataRef.put(charRes.background, "icExpBackground")
+
+        return charRes
+
     # We need to override the run method in order to return the psfSuccess flag
     @pipeBase.timeMethod
-    def run(self, exposure, exposureIdInfo=None, background=None):
-        """!Characterize a science image
-
-        Peforms the following operations:
-        - Iterate the following config.psfIterations times, or once if config.doMeasurePsf false:
-            - detect and measure sources and estimate PSF (see detectMeasureAndEstimatePsf for
-              details)
-        - interpolate over cosmic rays
-        - perform final measurement
-
-        @param[in,out] exposure  exposure to characterize (an lsst.afw.image.ExposureF or similar).
-            The following changes are made:
-            - update or set psf
-            - set apCorrMap
-            - update detection and cosmic ray mask planes
-            - subtract background and interpolate over cosmic rays
-        @param[in] exposureIdInfo  ID info for exposure (an lsst.obs.base.ExposureIdInfo).
-            If not provided, returned SourceCatalog IDs will not be globally unique.
-        @param[in,out] background  initial model of background already subtracted from exposure
-            (an lsst.afw.math.BackgroundList). May be None if no background has been subtracted,
-            which is typical for image characterization.
-
-        @return pipe_base Struct containing these fields, all from the final iteration
-        of detectMeasureAndEstimatePsf:
-        - exposure: characterized exposure; image is repaired by interpolating over cosmic rays,
-            mask is updated accordingly, and the PSF model is set
-        - sourceCat: detected sources (an lsst.afw.table.SourceCatalog)
-        - background: model of background subtracted from exposure (an lsst.afw.math.BackgroundList)
-        - psfCellSet: spatial cells of PSF candidates (an lsst.afw.math.SpatialCellSet)
+    def run(self, exposure, exposureIdInfo=None, background=None, offset_sky_background=None):
+        """
+        Huntsman method overrides:
+          - Return the psfSuccess flag
+          - Implement offset sky background subtraction
         """
         self._frame = self._initialFrame  # reset debug display frame
 
@@ -61,21 +85,32 @@ class HuntsmanCharacterizeImageTask(CharacterizeImageTask):
         if exposureIdInfo is None:
             exposureIdInfo = ExposureIdInfo()
 
-        # subtract an initial estimate of background level
-        background = self.background.run(exposure).background
+        # This is a Huntsman modification
+        if offset_sky_background:
+            exposure_arr = exposure.getImage().getArray()
+            exposure_arr -= offset_sky_background.getImage().getArray()
+        else:
+            # Measure and subtract an initial estimate of background level
+            # Note this implicitly modifies the exposure
+            background = self.background.run(exposure).background
 
+        # Detect sources and measure the PSF
         psfIterations = self.config.psfIterations if self.config.doMeasurePsf else 1
         for i in range(psfIterations):
-            dmeRes = self.detectMeasureAndEstimatePsf(
-                exposure=exposure,
-                exposureIdInfo=exposureIdInfo,
-                background=background,
-            )
 
+            dmeRes = self.detectMeasureAndEstimatePsf(
+                exposure=exposure, exposureIdInfo=exposureIdInfo, background=background)
+
+            # Get summary statistics for this iteration
             psf = dmeRes.exposure.getPsf()
             psfSigma = psf.computeShape().getDeterminantRadius()
             psfDimensions = psf.computeImage().getDimensions()
-            medBackground = np.median(dmeRes.background.getImage().getArray())
+
+            if offset_sky_background:
+                medBackground = np.median(offset_sky_background.getImage().getArray())
+            else:
+                medBackground = np.median(dmeRes.background.getImage().getArray())
+
             self.log.info("iter %s; PSF sigma=%0.2f, dimensions=%s; median background=%0.2f" %
                           (i + 1, psfSigma, psfDimensions, medBackground))
 

@@ -1,4 +1,4 @@
-type: huntsman.drp.reduction.lsst.LsstDataReduction
+type: huntsman.drp.reduction.lsst.LsstReduction
 name: example-reduction
 
 query:

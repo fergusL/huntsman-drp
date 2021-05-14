@@ -10,7 +10,7 @@ from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
 from huntsman.drp.refcat import RefcatClient
 
 
-class DataReductionBase(HuntsmanBase):
+class ReductionBase(HuntsmanBase):
     """ Generic class for data reductions. """
 
     def __init__(self, name, query, directory=None, exposure_collection=None, calib_collection=None,

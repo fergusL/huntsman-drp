@@ -172,11 +172,11 @@ def test_make_master_calibs(exposure_collection, config):
 
 
 def test_make_coadd(exposure_collection_real_data, master_calib_collection_real_data,
-                    refcat_filename, config):
+                    refcat_filename, config, n_to_process=1):
     """ Test that we can make coadds """
 
     # Identify science files to process
-    docs = exposure_collection_real_data.find({"dataType": "science"})
+    docs = exposure_collection_real_data.find({"dataType": "science"})[:n_to_process]
     assert len(docs) > 0
 
     # Get corresponding calibs

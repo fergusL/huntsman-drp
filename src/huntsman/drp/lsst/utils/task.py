@@ -3,6 +3,39 @@ import subprocess
 from huntsman.drp.core import get_logger
 
 
+def get_dataId_argstr(dataIds, selectId=False):
+    """ Get command line task argument string for a list of dataIds.
+    Args:
+        dataIds (list of dict): The list of dataIds.
+        selectId (bool): If True, use the --selectId flag instead of --id. Default False.
+    Returns:
+        str: The dataId argument string.
+    """
+    s = ""
+    for dataId in dataIds:
+        s += " --selectId" if selectId else " --id"
+        for k, v in dataId.items():
+            s += f" {k}={v}"
+    return s
+
+
+def get_skymapId_argstr(skymapIds, filter_name):
+    """ Get command line task argument string for a list of dataIds.
+    Args:
+        skymapIds (list of dict): The list of skymapIds.
+        filter_name (str): The filter name.
+    Returns:
+        str: The skymapId argument string.
+    """
+    s = ""
+    for skymapId in skymapIds:
+        s += " --id"
+        s += f" tract={skymapId['tractId']}"
+        s += " patch=" + "^".join(skymapId['patchIds'])
+        s += f" filter={filter_name}"
+    return s
+
+
 def run_cmdline_task_subprocess(cmd, logger=None, timeout=None):
     """Run an LSST command line task.
     Args:
@@ -37,7 +70,7 @@ def run_cmdline_task_subprocess(cmd, logger=None, timeout=None):
     return
 
 
-def run_cmdline_task(Task, args, config=None, log=None, doReturnResults=True):
+def run_cmdline_task(Task, args, config=None, log=None, doReturnResults=True, **kwargs):
     """ Run a command line task and return results.
     Args:
         Task (class): The LSST Task to run.
@@ -49,6 +82,7 @@ def run_cmdline_task(Task, args, config=None, log=None, doReturnResults=True):
     Returns:
         lsst.pipe.base.struct.Struct: The task results.
     """
-    results = Task.parseAndRun(args=args, config=config, log=log, doReturnResults=doReturnResults)
+    results = Task.parseAndRun(args=args, config=config, log=log, doReturnResults=doReturnResults,
+                               **kwargs)
 
     return results

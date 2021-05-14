@@ -37,7 +37,8 @@ class HuntsmanProcessCcdTask(ProcessCcdTask):
         isrSuccess = True
         try:
             exposure = self.isr.runDataRef(sensorRef).exposure
-        except Exception:
+        except Exception as err:
+            self.log.error(f"Error while runing charImage: {err!r}")
             isrSuccess = False
 
         # Characterise image
@@ -47,13 +48,16 @@ class HuntsmanProcessCcdTask(ProcessCcdTask):
                 charRes = self.charImage.runDataRef(dataRef=sensorRef, exposure=exposure,
                                                     doUnpersist=False)
                 exposure = charRes.exposure
-            except Exception:
+            except Exception as err:
+                self.log.error(f"Error while runing charImage: {err!r}")
                 charSuccess = False
 
         # The PSF code is wrapped in a try, except block so we can return the other results
         # We need to explicitly indicate that the charImage task failed if the PSF failed
-        if not charRes.psfSuccess:
-            charSuccess = False
+        if charSuccess:
+            if not charRes.psfSuccess:
+                self.log.error("Error while runing charImage PSF estimator")
+                charSuccess = False
 
         # Do image calibration (astrometry + photometry)
         calibSuccess = False
@@ -63,8 +67,8 @@ class HuntsmanProcessCcdTask(ProcessCcdTask):
                     dataRef=sensorRef, exposure=charRes.exposure, background=charRes.background,
                     doUnpersist=False, icSourceCat=charRes.sourceCat)
                 calibSuccess = True
-            except Exception:
-                pass
+            except Exception as err:
+                self.log.error(f"Error while runing calibrate: {err!r}")
 
         return pipeBase.Struct(
             charRes=charRes,

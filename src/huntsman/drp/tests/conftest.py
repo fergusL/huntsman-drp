@@ -7,7 +7,6 @@ from huntsman.drp.fitsutil import FitsHeaderTranslator
 from huntsman.drp.collection import RawExposureCollection
 from huntsman.drp import refcat as rc
 from huntsman.drp.utils import testing
-from huntsman.drp.services.calib import MasterCalibMaker
 
 # ===========================================================================
 # Config
@@ -116,27 +115,17 @@ def exposure_collection_real_data(session_config):
 
 
 @pytest.fixture(scope="session")
-def master_calib_collection_real_data(exposure_collection_real_data, session_config):
+def master_calib_collection_real_data(session_config):
     """ Make a master calib table by reducing real calib data.
     TODO: Store created files so they can be copied in for quicker tests.
     """
-    calib_maker = MasterCalibMaker(exposure_collection=exposure_collection_real_data,
-                                   config=session_config)
-    calib_maker.logger.info("Creating master calibs for tests.")
+    calib_collection = testing.create_test_calib_collection(config=session_config)
 
-    # Make master calibs
-    dates = calib_maker._get_unique_dates()
-    for date in dates[:1]:  # Limit to one date for now
-        calib_maker.process_date(date)
-
-    calib_maker.logger.info("Finished creating master calibs for tests.")
-
-    calib_collection = calib_maker._calib_collection
     yield calib_collection
 
     # Remove the metadata from the DB ready for other tests
-    all_metadata = calib_collection.find()
-    calib_collection.delete_many(all_metadata)
+    calib_collection.delete_all(really=True)
+    assert not calib_collection.find()
 
 
 @pytest.fixture(scope="function")

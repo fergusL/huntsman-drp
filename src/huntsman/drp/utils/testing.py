@@ -7,10 +7,10 @@ from astropy.io import fits
 from astropy import units as u
 
 from huntsman.drp.core import get_config
-from huntsman.drp.lsst.butler import ButlerRepository
+from huntsman.drp.lsst.butler import ButlerRepository, TemporaryButlerRepository
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import parse_date
-from huntsman.drp.collection import RawExposureCollection
+from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
 from huntsman.drp.services.ingestor import FileIngestor
 
 
@@ -33,17 +33,13 @@ def datetime_to_taiObs(date):
 # Real test data
 
 
-def get_testdata_dir(config):
-    return os.path.join(config["directories"]["root"], "tests", "data")
-
-
 def get_testdata_fits_filenames(config=None):
     """
     """
     if config is None:
         config = get_config()
 
-    datadir = get_testdata_dir(config)
+    datadir = os.path.join(config["directories"]["root"], "tests", "data", "raw")
 
     # Get test data filenames
     filenames = []
@@ -59,8 +55,7 @@ def get_refcat_filename(config):
     Args:
         config (dict): The config dict.
     """
-    datadir = os.path.join(config["directories"]["root"], "tests", "data")
-    return os.path.join(datadir, "refcat.csv")
+    return os.path.join(config["directories"]["root"], "tests", "data", "refcat.csv")
 
 
 def create_test_bulter_repository(directory, config=None, **kwargs):
@@ -85,10 +80,13 @@ def create_test_bulter_repository(directory, config=None, **kwargs):
     return br
 
 
-def create_test_exposure_collection(config, name="real_data", clear=True):
+def create_test_exposure_collection(config=None, name="test-real-data", clear=True):
     """ Ingest real testing images into a RawExposureCollection
     """
-    dir = get_testdata_dir(config)
+    if config is None:
+        config = get_config()
+
+    dir = os.path.join(config["directories"]["root"], "tests", "data", "raw")
     filenames = get_testdata_fits_filenames(config)
 
     exposure_collection = RawExposureCollection(config=config, collection_name=name)
@@ -117,6 +115,24 @@ def create_test_exposure_collection(config, name="real_data", clear=True):
     assert all(["metrics" in d for d in exposure_collection.find()])
 
     return exposure_collection
+
+
+def create_test_calib_collection(config=None):
+    """ Make a calib collection out of ready-made master calibs. """
+    if config is None:
+        config = get_config()
+
+    calib_collection = MasterCalibCollection(config=config, collection_name="calib-test")
+    calib_collection.delete_all(really=True)
+    assert not calib_collection.find()
+
+    dir = os.path.join(config["directories"]["root"], "tests", "data")
+
+    with TemporaryButlerRepository(calib_collection=calib_collection) as br:
+        br.archive_master_calibs(directory=dir)
+
+    assert calib_collection.find()
+    return calib_collection
 
 
 # Fake test data

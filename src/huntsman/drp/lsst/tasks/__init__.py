@@ -6,7 +6,7 @@ import os
 from lsst.pipe.tasks.ingest import IngestTask
 from lsst.utils import getPackageDir
 
-from huntsman.drp.lsst.utils.task import run_cmdline_task, run_cmdline_task_subprocess
+from huntsman.drp.lsst.utils import task as utils
 from huntsman.drp.lsst.tasks.ingestRefcat import HuntsmanIngestIndexedReferenceTask
 from huntsman.drp.lsst.tasks.processCcd import HuntsmanProcessCcdTask
 
@@ -87,7 +87,7 @@ def ingest_master_calibs(datasetType, filenames, butler_dir, calib_dir, validity
     cmd += f" --configfile {config_file}"
 
     # Run the LSST command
-    run_cmdline_task_subprocess(cmd)
+    utils.run_cmdline_task_subprocess(cmd)
 
 
 def make_master_calib(datasetType, calibId, dataIds, butler_dir, calib_dir, rerun, nodes=1,
@@ -108,16 +108,13 @@ def make_master_calib(datasetType, calibId, dataIds, butler_dir, calib_dir, reru
     # Make the command to run the LSST task
     cmd = f"{MASTER_CALIB_SCRIPTS[datasetType]} {butler_dir} --rerun {rerun}"
     cmd += f" --calib {calib_dir}"
-    for data_id in dataIds:
-        cmd += " --id"
-        for k, v in data_id.items():
-            cmd += f" {k}={v}"
+    cmd += utils.get_dataId_argstr(dataIds)
     cmd += " --calibId " + " ".join([f"{k}={v}" for k, v in calibId.items()])
     cmd += f" --nodes {nodes} --procs {procs}"
     cmd += " --doraise"  # We want the code to raise an error if there is a problem
 
     # Run the LSST script
-    return run_cmdline_task_subprocess(cmd)
+    return utils.run_cmdline_task_subprocess(cmd)
 
 
 def make_calexp(dataId, rerun, butler_dir, calib_dir, doReturnResults=True, **kwargs):
@@ -159,10 +156,7 @@ def make_calexps(dataIds, rerun, butler_dir, calib_dir, procs=1, clobber_config=
     if clobber_config:
         cmd += " --clobber-config"
 
-    for dataId in dataIds:
-        cmd += " --id"
-        for k, v in dataId.items():
-            cmd += f" {k}={v}"
+    cmd += utils.get_dataId_argstr(dataIds)
 
     extra_config = {} if extra_config is None else extra_config
     if extra_config:
@@ -170,8 +164,8 @@ def make_calexps(dataIds, rerun, butler_dir, calib_dir, procs=1, clobber_config=
         for k, v in extra_config.items():
             cmd += f" {k}={v}"
 
-    result = run_cmdline_task(HuntsmanProcessCcdTask, cmd.split(), doReturnResults=doReturnResults,
-                              **kwargs)
+    result = utils.run_cmdline_task(HuntsmanProcessCcdTask, cmd.split(),
+                                    doReturnResults=doReturnResults, **kwargs)
 
     if doReturnResults:
         return result.resultList[0].result.getDict()
@@ -179,47 +173,45 @@ def make_calexps(dataIds, rerun, butler_dir, calib_dir, procs=1, clobber_config=
     return result
 
 
-def make_discrete_sky_map(butler_dir, calib_dir, rerun):
+def make_discrete_sky_map(butler_dir, calib_dir, rerun, dataIds):
     """Create a sky map that covers processed exposures.
     Args:
         butler_dir (str): The butler directory.
         calib_dir (str): The calib directory.
         rerun (str): The rerun name.
+        dataIds (list of dict): The list of dataIds to process.
     """
-    cmd = f"makeDiscreteSkyMap.py {butler_dir} --calib {calib_dir} --id --rerun {rerun}"
-    run_cmdline_task_subprocess(cmd)
+    cmd = f"makeDiscreteSkyMap.py {butler_dir} --calib {calib_dir} --rerun {rerun}"
+    cmd += utils.get_dataId_argstr(dataIds)
+    return utils.run_cmdline_task_subprocess(cmd)
 
 
-def make_coadd_temp_exp(butler_dir, calib_dir, rerun, tract_id, patch_ids, filter_name):
+def make_coadd_temp_exp(butler_dir, calib_dir, rerun, skymapIds, dataIds, filter_name):
     """ Warp exposures onto the skymap.
     Args:
         butler_dir (str): The butler directory.
         calib_dir (str): The calib directory.
         rerun (str): The rerun name.
-        tract_id (int): The tract ID.
-        patch_ids (list): A list of patch indices (x, y indices).
+        skymapIds (list of dict): The skymapIds to process.
+        dataIds (list of dict): The list of dataIds to process.
         filter_name (str): The filter name.
     """
     cmd = f"makeCoaddTempExp.py {butler_dir} --calib {calib_dir} --rerun {rerun}"
-    cmd += f" --selectId filter={filter_name}"
-    cmd += f" --id filter={filter_name}"
-    cmd += f" tract={tract_id}"
-    cmd += " patch=" + "^".join(patch_ids)
-    run_cmdline_task_subprocess(cmd)
+    cmd += utils.get_dataId_argstr(dataIds, selectId=True)
+    cmd += utils.get_skymapId_argstr(skymapIds, filter_name=filter_name)
+    return utils.run_cmdline_task_subprocess(cmd)
 
 
-def assemble_coadd(butler_dir, calib_dir, rerun, tract_id, patch_ids, filter_name):
+def assemble_coadd(butler_dir, calib_dir, rerun, skymapIds, dataIds, filter_name):
     """ Assemble the coadd from warped exposures.
     Args:
         butler_dir (str): The butler directory.
         rerun (str): The rerun name.
-        tract_id (int): The tract ID.
-        patch_ids (list): A list of patch indices (x, y indices).
+        skymapIds (list of dict): The skymapIds to process.
+        dataIds (list of dict): The list of dataIds to process.
         filter_name (str): The filter name.
     """
     cmd = f"assembleCoadd.py {butler_dir} --calib {calib_dir} --rerun {rerun}"
-    cmd += f" --selectId filter={filter_name}"
-    cmd += f" --id filter={filter_name}"
-    cmd += f" tract={tract_id}"
-    cmd += " patch=" + "^".join(patch_ids)
-    run_cmdline_task_subprocess(cmd)
+    cmd += utils.get_dataId_argstr(dataIds, selectId=True)
+    cmd += utils.get_skymapId_argstr(skymapIds, filter_name=filter_name)
+    return utils.run_cmdline_task_subprocess(cmd)
