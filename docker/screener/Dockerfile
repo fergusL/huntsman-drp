@@ -3,8 +3,9 @@ FROM ${base_image}
 
 ENV PATH="/root/miniconda3/bin:${PATH}"
 ENV HUNTSMAN_LOG_DIR=/home/huntsman-logs
+ENV HUNTSMAN_DRP=/home/huntsman-drp
 
-COPY . /home/huntsman-drp
+COPY . ${HUNTSMAN_DRP}
 
 USER root
 # update apt-get
@@ -27,7 +28,7 @@ RUN apt-get update -y && \
     # Make huntsman directories
     mkdir -p "${HUNTSMAN_LOG_DIR}" && \
     # Install local huntsman-drp into the image
-    cd /home/huntsman-drp && python setup.py develop
+    cd ${HUNTSMAN_DRP} && python setup.py develop
 
 WORKDIR /home
 ADD docker/screener/bash-config.sh .
