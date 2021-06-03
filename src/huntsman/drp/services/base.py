@@ -186,7 +186,7 @@ class ProcessQueue(HuntsmanBase, ABC):
         return status
 
     def start(self):
-        """ Start the file ingestor. """
+        """ Start the service. """
         self.logger.info(f"Starting {self}.")
         self._stop = False
         for thread in self._threads:

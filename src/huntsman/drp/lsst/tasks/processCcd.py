@@ -42,19 +42,19 @@ class HuntsmanProcessCcdTask(ProcessCcdTask):
             isrSuccess = False
 
         # Characterise image
-        charSuccess = True
+        charSuccess = False
         if isrSuccess:
             try:
                 charRes = self.charImage.runDataRef(dataRef=sensorRef, exposure=exposure,
                                                     doUnpersist=False)
                 exposure = charRes.exposure
+                charSuccess = True
             except Exception as err:
                 self.log.error(f"Error while runing charImage: {err!r}")
-                charSuccess = False
 
         # The PSF code is wrapped in a try, except block so we can return the other results
         # We need to explicitly indicate that the charImage task failed if the PSF failed
-        if charSuccess:
+        if isrSuccess and charSuccess:
             if not charRes.psfSuccess:
                 self.log.error("Error while runing charImage PSF estimator")
                 charSuccess = False

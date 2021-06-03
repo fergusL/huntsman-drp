@@ -168,6 +168,13 @@ def make_calexps(dataIds, rerun, butler_dir, calib_dir, procs=1, clobber_config=
                                     doReturnResults=doReturnResults, **kwargs)
 
     if doReturnResults:
+
+        # If resultList is an empty list, there has been an problem during the LSST call
+        # TODO: Figure out how to raise these errors in the main thread
+        if not result.resultList:
+            raise RuntimeError("No results from ProcessCcdTask. There has probably been an uncaught"
+                               " exception raised by the LSST stack.")
+
         return result.resultList[0].result.getDict()
 
     return result
