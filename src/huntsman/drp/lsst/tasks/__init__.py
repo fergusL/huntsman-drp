@@ -18,7 +18,8 @@ INGEST_CALIB_CONFIGS = {"bias": "ingestBias.py",
 
 MASTER_CALIB_SCRIPTS = {"bias": "constructBias.py",
                         "dark": "constructDark.py",
-                        "flat": "constructFlat.py"}
+                        "flat": os.path.join(os.environ["HUNTSMAN_DRP"], "scripts", "lsst",
+                                             "constructFlat.py")}
 
 
 def ingest_raw_data(filenames, butler_dir, mode="link", ignore_ingested=True):
@@ -112,6 +113,9 @@ def make_master_calib(datasetType, calibId, dataIds, butler_dir, calib_dir, reru
     cmd += " --calibId " + " ".join([f"{k}={v}" for k, v in calibId.items()])
     cmd += f" --nodes {nodes} --procs {procs}"
     cmd += " --doraise"  # We want the code to raise an error if there is a problem
+
+    # For some reason we need to clobber the config for Huntsman task overrides to work
+    cmd += " --clobber-config"
 
     # Run the LSST script
     return utils.run_cmdline_task_subprocess(cmd)
