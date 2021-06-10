@@ -27,7 +27,6 @@ def _process_document(document, exposure_collection, calib_collection, timeout, 
     directory_prefix = document["expId"]
 
     with TemporaryButlerRepository(logger=logger, config=config,
-                                   calib_collection=calib_collection,
                                    directory_prefix=directory_prefix) as br:
 
         logger.debug(f"Butler directory for {document}: {br.butler_dir}")

@@ -2,7 +2,6 @@ import os
 from collections import defaultdict
 
 from huntsman.drp.utils.date import current_date
-from huntsman.drp.collection import MasterCalibCollection
 from huntsman.drp.lsst.butler import ButlerRepository, TemporaryButlerRepository
 
 
@@ -97,6 +96,8 @@ def test_make_master_calibs(exposure_collection, config):
     doc_filter = {k: doc[k] for k in ["CAM-ID", "dateObs"]}
     docs = exposure_collection.find(doc_filter)
 
+    calib_docs = exposure_collection.get_calib_docs(current_date(), documents=docs)
+
     n_cameras = 1
     n_days = 1
     n_filters = len(test_config["filters"])
@@ -121,18 +122,16 @@ def test_make_master_calibs(exposure_collection, config):
 
     filenames = [d["filename"] for d in docs]
 
+    rerun = "test_rerun"
     with TemporaryButlerRepository(config=config) as br:
 
         br.ingest_raw_data(filenames)
 
         # Make the calibs
-        br.make_master_calibs(calib_date=current_date(), rerun="test_rerun")
-
-        # Archive the calibs
-        br.archive_master_calibs()
+        br.make_master_calibs(calib_docs, rerun=rerun)
 
         # Check the biases in the butler dir
-        metadata_bias = br.get_calib_metadata(datasetType="bias")
+        metadata_bias = br.get_dataIds(datasetType="bias")
         assert len(metadata_bias) == n_bias
         ccds = set()
         for md in metadata_bias:
@@ -140,7 +139,7 @@ def test_make_master_calibs(exposure_collection, config):
         assert len(ccds) == n_cameras
 
         # Check the darks in the butler dir
-        metadata_dark = br.get_calib_metadata(datasetType="dark")
+        metadata_dark = br.get_dataIds(datasetType="dark", rerun=rerun)
         assert len(metadata_dark) == n_dark
         ccds = set()
         for md in metadata_dark:
@@ -148,7 +147,7 @@ def test_make_master_calibs(exposure_collection, config):
         assert len(ccds) == n_cameras
 
         # Check the flats in the butler dir
-        metadata_flat = br.get_calib_metadata(datasetType="flat")
+        metadata_flat = br.get_dataIds(datasetType="flat", rerun=rerun)
         assert len(metadata_flat) == n_flat
         filters = set()
         ccds = set()
@@ -157,18 +156,6 @@ def test_make_master_calibs(exposure_collection, config):
             ccds.update([md["ccd"]])
         assert len(filters) == n_filters
         assert len(ccds) == n_cameras
-
-        # Check the calibs in the archive
-        master_calib_collection = MasterCalibCollection(config=config)
-        calib_metadata = master_calib_collection.find()
-        filenames = [c["filename"] for c in calib_metadata]
-        datasettypes = [c["datasetType"] for c in calib_metadata]
-        assert len(calib_metadata) == n_flat + n_bias + n_dark
-        assert sum([c == "flat" for c in datasettypes]) == n_flat
-        assert sum([c == "bias" for c in datasettypes]) == n_bias
-        assert sum([c == "dark" for c in datasettypes]) == n_dark
-        for filename in filenames:
-            assert os.path.isfile(filename)
 
 
 def test_make_coadd(exposure_collection_real_data, master_calib_collection_real_data,

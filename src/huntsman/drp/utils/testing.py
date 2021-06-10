@@ -1,6 +1,7 @@
 import os
 import yaml
 import time
+from glob import glob
 from datetime import timedelta
 import numpy as np
 from astropy.io import fits
@@ -12,6 +13,7 @@ from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import parse_date
 from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
 from huntsman.drp.services.ingestor import FileIngestor
+from huntsman.drp.lsst.utils.calib import get_calib_filename
 
 
 EXPTIME_BIAS = 1E-32  # Minimum exposure time for ZWO cameras is > 0
@@ -58,7 +60,7 @@ def get_refcat_filename(config):
     return os.path.join(config["directories"]["root"], "tests", "data", "refcat.csv")
 
 
-def create_test_bulter_repository(directory, config=None, **kwargs):
+def create_test_bulter_repository(directory, config=None, with_calibs=False, **kwargs):
     """ Create a butler repository and ingest the testing dataset.
     Args:
         **kwargs: Parsed to ButlerRepository.
@@ -76,6 +78,14 @@ def create_test_bulter_repository(directory, config=None, **kwargs):
     # Ingest the refcat
     refcat_filename = get_refcat_filename(config)
     br.ingest_reference_catalogue([refcat_filename])
+
+    if with_calibs:
+        rootdir = os.path.join(config["directories"]["root"], "tests", "data", "calib")
+
+        for datasetType in config["calibs"]["types"]:
+            dir = os.path.join(rootdir, datasetType)
+            filenames = [y for x in os.walk(dir) for y in glob(os.path.join(x[0], '*.fits'))]
+            br.ingest_master_calibs(datasetType, filenames)
 
     return br
 
@@ -126,10 +136,34 @@ def create_test_calib_collection(config=None):
     calib_collection.delete_all(really=True)
     assert not calib_collection.find()
 
-    dir = os.path.join(config["directories"]["root"], "tests", "data")
+    rootdir = os.path.join(config["directories"]["root"], "tests", "data", "calib")
 
-    with TemporaryButlerRepository(calib_collection=calib_collection) as br:
-        br.archive_master_calibs(directory=dir)
+    # Use a butler instance to ingest master calibs and get metadata
+    calibIds = []
+    filenames = []
+    with TemporaryButlerRepository(config=config) as br:
+
+        for datasetType in config["calibs"]["types"]:
+
+            dir = os.path.join(rootdir, datasetType)
+            fnames = [y for x in os.walk(dir) for y in glob(os.path.join(x[0], '*.fits'))]
+
+            # Ingest calibs
+            br.ingest_master_calibs(datasetType, fnames)
+
+            # Get the calibIds
+            mds = br.get_dataIds(datasetType)
+            for md in mds:
+                md["datasetType"] = datasetType
+            calibIds.extend(mds)
+
+            # Get the corresponding ordered filenames
+            fnames = [get_calib_filename(_, config=config, directory=br.calib_dir) for _ in mds]
+            filenames.extend(fnames)
+
+        # Archive the files
+        for filename, calibId in zip(filenames, calibIds):
+            calib_collection.archive_master_calib(filename, calibId)
 
     assert calib_collection.find()
     return calib_collection

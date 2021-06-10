@@ -1,4 +1,5 @@
 """ Classes to represent dataIds. """
+from copy import deepcopy
 from collections import abc
 from contextlib import suppress
 
@@ -89,16 +90,30 @@ class Document(abc.Mapping):
         self._document.update(d)
 
     def to_mongo(self, flatten=False):
-        """ Get the full mongo filter for the document """
+        """ Get the full mongo filter for the document.
+        Args:
+            flatten (bool, optional): If True, return flattened dictionary using dot notation.
+                Default False.
+        """
         d = encode_mongo_filter(self._document)
         if not flatten:
             return unflatten_dict(d)
         return d
 
     def get_mongo_id(self):
-        """ Get the unique mongo ID for the document """
+        """ Get the unique mongo ID for the document.
+        Returns:
+            dict: The encoded document.
+        """
         doc = {k: self[k] for k in self._required_keys}
         return encode_mongo_filter(doc)
+
+    def copy(self):
+        """ Copy the document.
+        Returns:
+            Document: The copied document.
+        """
+        return deepcopy(self)
 
     # Private methods
 

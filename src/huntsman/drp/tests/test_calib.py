@@ -1,3 +1,4 @@
+import os
 import time
 import pytest
 
@@ -103,6 +104,9 @@ def test_master_calib_maker(calib_maker, config):
             if len([d for d in dataset_types if d == "bias"]) == n_bias:
                 if len([d for d in dataset_types if d == "dark"]) == n_dark:
                     break
+
+        for filename in calib_collection.find(key="filename"):
+            assert os.path.isfile(filename)
 
         if not calib_maker.is_running:
             raise RuntimeError("Calib maker has stopped running. Check the logs for details.")

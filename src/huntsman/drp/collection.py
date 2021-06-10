@@ -1,4 +1,6 @@
 """Code to interface with the Huntsman mongo database."""
+import os
+import shutil
 from contextlib import suppress
 from datetime import timedelta
 from urllib.parse import quote_plus
@@ -8,10 +10,11 @@ import pymongo
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
 
 from huntsman.drp.base import HuntsmanBase
-from huntsman.drp.utils.date import current_date, parse_date
+from huntsman.drp.utils.date import current_date, parse_date, date_to_ymd
 from huntsman.drp.document import Document, RawExposureDocument, CalibDocument
 from huntsman.drp.utils.mongo import encode_mongo_filter, mongo_logical_or, mongo_logical_and
 from huntsman.drp.utils.ingest import METRIC_SUCCESS_FLAG
+from huntsman.drp.lsst.utils.calib import get_calib_filename
 
 
 class Collection(HuntsmanBase):
@@ -108,11 +111,12 @@ class Collection(HuntsmanBase):
 
         self.logger.debug(f"Performing mongo find operation with filter: {mongo_filter}.")
 
-        documents = list(self._collection.find(mongo_filter, {"_id": False}))
+        if limit is None:
+            limit = 0
+        cursor = self._collection.find(mongo_filter, {"_id": False}).limit(limit)
+        documents = list(cursor)
 
         self.logger.debug(f"Find operation returned {len(documents)} results.")
-        if limit:
-            documents = documents[:limit]
 
         if key is not None:
             return [d[key] for d in documents]
@@ -365,24 +369,28 @@ class RawExposureCollection(Collection):
 
         return super().insert_one(document, *args, **kwargs)
 
-    def get_matching_raw_calibs(self, calib_document, calib_date):
+    def get_matching_raw_calibs(self, calib_document, calib_date, validity=None):
         """ Return matching set of calib IDs for a given data_id and calib_date.
         Args:
             calib_document (CalibDocument): The calib document to match with.
             calib_date (object): An object that can be interpreted as a date.
+            validity (datetime.timedelta): The validity of the calibs.
         Returns:
-            list of RawExposureDocument: The matching raw calibs.
+            list of RawExposureDocument: The matching raw calibs ordered by increasing time diff.
         """
+        if validity is None:
+            validity = timedelta(days=self.config["calibs"]["validity"])
+
         # Make the document filter
         dataset_type = calib_document["datasetType"]
         matching_keys = self.config["calibs"]["matching_columns"][dataset_type]
+
         doc_filter = {k: calib_document[k] for k in matching_keys}
 
         # Add dataType to doc filter
         doc_filter["dataType"] = dataset_type
 
         # Add valid date range to query
-        validity = timedelta(days=self.config["calibs"]["validity"])
         calib_date = parse_date(calib_date)
         date_start = calib_date - validity
         date_end = calib_date + validity
@@ -392,7 +400,64 @@ class RawExposureCollection(Collection):
         self.logger.debug(f"Found {len(documents)} matching raw calib documents for"
                           f" {calib_document} at {calib_date}.")
 
+        # Sort by time difference in increasing order
+        # This makes it easy to select only the nearest matches using indexing
+        timedeltas = [abs(d["date"] - calib_date) for d in documents]
+        documents = [x for _, x in sorted(zip(timedeltas, documents))]
+
         return documents
+
+    def get_calib_docs(self, calib_date, documents=None, validity=None):
+        """ Get all possible CalibDocuments from a set of RawExposureDocuments.
+        Args:
+            calib_date (object): The calib date.
+            documents (list of RawExposureDocument, optional): The list of documents to process.
+                If not provided, will lookup the appropriate documents from the collection.
+            validity (datetime.timedelta): The validity of the calibs.
+        Returns:
+            set of CalibDocument: The calb documents.
+        """
+        data_types = self.config["calibs"]["types"]
+        if validity is None:
+            validity = timedelta(days=self.config["calibs"]["validity"])
+
+        calib_date = parse_date(calib_date)
+        date_start = calib_date - validity
+        date_end = calib_date + validity
+
+        # Get metadata for all raw calibs that are valid for this date
+        if documents is None:
+            documents = self.find({"dataType": {"in": data_types}}, date_start=date_start,
+                                  date_end=date_end, screen=True, quality_filter=True)
+        else:
+            documents = [d for d in documents if d["dataType"] in data_types]
+
+        calib_docs = set([self.raw_doc_to_calib_doc(d, calib_date) for d in documents])
+
+        self.logger.info(f"Found {len(calib_docs)} calibIds for calib_date={calib_date}.")
+
+        return calib_docs
+
+    def raw_doc_to_calib_doc(self, document, calib_date):
+        """ Convert a RawExposureDocument into its corresponding CalibDocument.
+        Args:
+            document (RawExposureDocument): The raw calib document.
+            calib_date (object): The calib date.
+        Returns:
+            CalibDocument: The matching calib document.
+        """
+        calib_type = document["dataType"]
+
+        # Get minimal calib metadata
+        keys = self.config["calibs"]["matching_columns"][calib_type]
+        calib_dict = {k: document[k] for k in keys}
+
+        # Add extra required metadata
+        calib_dict["calibDate"] = date_to_ymd(calib_date)
+        calib_dict["datasetType"] = calib_type
+        calib_dict["filename"] = get_calib_filename(calib_dict, config=self.config)
+
+        return CalibDocument(calib_dict)
 
     def clear_calexp_metrics(self):
         """ Clear all calexp metrics from the collection.
@@ -479,3 +544,26 @@ class MasterCalibCollection(Collection):
             best_calibs[calib_type] = calib_docs[np.argmin(timediffs)]
 
         return best_calibs
+
+    def archive_master_calib(self, filename, metadata):
+        """ Copy the FITS files into the archive directory and update the entry in the DB.
+        Args:
+            filename (str): The filename of the calib to archive, which is copied into the archive
+                dir.
+            metadata (abc.Mapping): The calib metadata to be stored in the document.
+        """
+        # Use the archived filename for the mongo document
+        archived_filename = get_calib_filename(metadata, config=self.config)
+
+        # Copy the file into the calib archive, overwriting if necessary
+        self.logger.debug(f"Copying {filename} to {archived_filename}.")
+        os.makedirs(os.path.dirname(archived_filename), exist_ok=True)
+        shutil.copy(filename, archived_filename)
+
+        # Update the document before archiving
+        metadata = metadata.copy()
+        metadata["filename"] = archived_filename
+
+        # Insert the metadata into the calib database
+        # Use replace operation with upsert because old document may already exist
+        self.replace_one({"filename": archived_filename}, metadata, upsert=True)
