@@ -13,6 +13,6 @@ if __name__ == "__main__":
 
     raw = RawExposureCollection()
 
-    for doc in raw.find(screen=False, quality_filter=False):
+    for doc in raw.find({"dataType": "science"}, screen=False, quality_filter=False):
         with suppress(KeyError):
             raw.update_one(doc, UPDATE)
