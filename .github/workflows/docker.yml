@@ -24,4 +24,4 @@ jobs:
         name: huntsmanarray/drp:develop
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
-        dockerfile: docker/screener/Dockerfile
+        dockerfile: docker/ingestor/Dockerfile
