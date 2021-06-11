@@ -7,6 +7,11 @@ from huntsman.drp.lsst.butler import TemporaryButlerRepository
 from huntsman.drp.refcat import RefcatClient
 from huntsman.drp.metrics.calexp import calculate_metrics
 
+# This is a boolean value that gets inserted into the DB
+# If it is True, the calexp will be queued for processing
+# This allows us to trigger re-processing without having to delete existing information
+CALEXP_METRIC_TRIGGER = "CALEXP_METRIC_TRIGGER"
+
 
 def _process_document(document, exposure_collection, calib_collection, timeout, **kwargs):
     """ Create a calibrated exposure (calexp) for the given data ID and store the metadata.
@@ -78,6 +83,9 @@ def _process_document(document, exposure_collection, calib_collection, timeout, 
         logger.debug(f"Calculating metrics for {document}")
         metrics = calculate_metrics(task_result)
 
+        # Mark processing complete
+        metrics[CALEXP_METRIC_TRIGGER] = False
+
         # Update the existing document with calexp metrics
         to_update = {"metrics": {"calexp": metrics}}
         exposure_collection.update_one(document_filter=document, to_update=to_update)
@@ -128,7 +136,13 @@ class CalexpQualityMonitor(ProcessQueue):
         Returns:
             bool: True if processing required, else False.
         """
-        try:
-            return "calexp" not in document["metrics"]
-        except KeyError:
+        if "metrics" not in document:
             return True
+
+        if "calexp" not in document["metrics"]:
+            return True
+
+        if CALEXP_METRIC_TRIGGER not in document["metrics"]["calexp"]:
+            return True
+
+        return bool(CALEXP_METRIC_TRIGGER)
