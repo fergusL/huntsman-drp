@@ -145,4 +145,4 @@ class CalexpQualityMonitor(ProcessQueue):
         if CALEXP_METRIC_TRIGGER not in document["metrics"]["calexp"]:
             return True
 
-        return bool(CALEXP_METRIC_TRIGGER)
+        return bool(document["metrics"]["calexp"][CALEXP_METRIC_TRIGGER])
