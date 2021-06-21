@@ -2,16 +2,20 @@ from contextlib import suppress
 
 from astropy import stats
 from astropy.wcs import WCS
+from astropy import units as u
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz
+
 from panoptes.utils.images.fits import get_solve_field
 
 from huntsman.drp.fitsutil import FitsHeaderTranslator
+from huntsman.drp.utils.date import parse_date
 
 # TODO: Move this to config?
 RAW_METRICS = ("get_wcs", "clipped_stats", "flipped_asymmetry")
 
 
 def get_wcs(filename, header, timeout=60, downsample=4, radius=5, remake_wcs=False, **kwargs):
-    """Function to call get_solve_field on a file and verify if a WCS solution could be found.
+    """ Function to call get_solve_field on a file and verify if a WCS solution could be found.
     Args:
         filename (str): The filename.
         timeout (int, optional): How long to try and solve in seconds. Defaults to 60.
@@ -66,18 +70,12 @@ def get_wcs(filename, header, timeout=60, downsample=4, radius=5, remake_wcs=Fal
 
 def clipped_stats(filename, data, header):
     """Return sigma-clipped image statistics.
-
-    Parameters
-    ----------
-    data : array
-        Image data as stored as an array.
-    header : dict
-        Dictionary containing image metadata
-
-    Returns
-    -------
-    dict
-        Dictionary containing the calculated stats values.
+    Args:
+        filename (str): The filename.
+        data (np.array): The data array.
+        header (abc.Mapping): The parsed FITS header.
+    Returns:
+        dict: The dict containing the metrics.
     """
     mean, median, stdev = stats.sigma_clipped_stats(data)
 
@@ -91,19 +89,13 @@ def clipped_stats(filename, data, header):
 
 
 def flipped_asymmetry(filename, data, header):
-    """Calculate the asymmetry statistics by flipping data in x and y directions.
-
-    Parameters
-    ----------
-    data : array
-        Image data as stored as an array.
-    header : dict
-        Dictionary containing image metadata
-
-    Returns
-    -------
-    dict
-        Dictionary containing the calculated stats values.
+    """ Calculate the asymmetry statistics by flipping data in x and y directions.
+    Args:
+        filename (str): The filename.
+        data (np.array): The data array.
+        header (abc.Mapping): The parsed FITS header.
+    Returns:
+        dict: The dict containing the metrics.
     """
     # Horizontal flip
     data_flip = data[:, ::-1]
@@ -112,3 +104,33 @@ def flipped_asymmetry(filename, data, header):
     data_flip = data[::-1, :]
     std_vertical = (data - data_flip).std()
     return {"flip_asymm_h": std_horizontal, "flip_asymm_v": std_vertical}
+
+
+def alt_az(filename, data, header):
+    """ Get the alt az of the observation from the header.
+    Args:
+        filename (str): The filename.
+        data (np.array): The data array.
+        header (abc.Mapping): The parsed FITS header.
+    Returns:
+        dict: The dict containing the metrics.
+    """
+    # Get the ra / dec of the observation
+    ra = header["RA-MNT"] * u.deg
+    dec = header["DEC-MNT"] * u.deg
+    radec = SkyCoord(ra=ra, dec=dec)
+
+    # Get the location of the observation
+    lat = header["LAT-OBS"] * u.deg
+    lon = header["LONG-OBS"] * u.deg
+    elevation = header["ELEV-OBS"] * u.m
+    location = EarthLocation(lat=lat, lon=lon, height=elevation)
+
+    # Create the Alt/Az frame
+    obstime = parse_date(header["DATE-OBS"])
+    frame = AltAz(obstime=obstime, location=location)
+
+    # Perform the transform
+    altaz = radec.transform_to(frame)
+
+    return {"alt": altaz.alt, "az": altaz.az}
