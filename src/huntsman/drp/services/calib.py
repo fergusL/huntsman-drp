@@ -81,8 +81,10 @@ class MasterCalibMaker(HuntsmanBase):
             calib_date (object): The calib date.
         """
         # Get set of all unique calib IDs from the raw calibs
+        # Note these calib docs are not necessarily present in the DB
         calib_docs = self._exposure_collection.get_calib_docs(calib_date=calib_date,
                                                               validity=self._validity)
+
         # Figure out which calib IDs need processing and which ones we can ingest
         calibs_to_process, calibs_to_ingest = self._get_calib_sets(calib_docs)
         if not calibs_to_process:
@@ -139,21 +141,20 @@ class MasterCalibMaker(HuntsmanBase):
         # If there aren't enough matches then return False
         if self._min_docs_per_calib:
             if len(raw_docs) < self._min_docs_per_calib:
-                self.logger.debug(f"Not enough raw exposures to make calibId={calib_doc}.")
+                self.logger.warning(f"Not enough raw exposures to make calibId={calib_doc}.")
                 return False
 
         # If the calib does not already exist, we need to make it
-        if not self._calib_collection.find_one(document_filter=calib_doc):
+        full_calib_doc = self._calib_collection.find_one(document_filter=calib_doc)
+        if not full_calib_doc:
             return True
 
         # If the file doesn't exist, we need to make it
-        if not os.path.isfile(calib_doc["filename"]):
+        if not os.path.isfile(full_calib_doc["filename"]):
             return True
 
-        # If there are new files for this calib, we need to make it again
-        if not ignore_date:
-            if any([r["date_modified"] >= calib_doc["date_modified"] for r in raw_docs]):
-                return True
+        if any([r["date_modified"] >= full_calib_doc["date_modified"] for r in raw_docs]):
+            return True
 
         # If there are no new files contributing to this existing calib, we can skip it
         return False
