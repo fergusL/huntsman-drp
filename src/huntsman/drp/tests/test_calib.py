@@ -54,7 +54,7 @@ def exposure_collection_lite(tmp_path_factory, config_lite):
         # Parse the header
         parsed_header = fits_header_translator.parse_header(header)
         parsed_header["filename"] = filename
-        parsed_header[METRIC_SUCCESS_FLAG] = True
+        parsed_header["metrics"] = {METRIC_SUCCESS_FLAG: True}
 
         # Insert the parsed header into the DB table
         exposure_collection.insert_one(parsed_header)

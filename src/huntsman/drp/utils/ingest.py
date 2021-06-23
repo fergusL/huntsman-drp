@@ -11,11 +11,8 @@ def screen_success(document):
     Returns:
         bool: True if success, else False.
     """
-    try:
-        return bool(document[METRIC_SUCCESS_FLAG])
-    except KeyError:
-        return False
-
+    return bool(document.get(f"metrics.{METRIC_SUCCESS_FLAG}", False))
+    
 
 def list_fits_files_recursive(directory):
     """Returns list of all files contained within a top level directory, including files
