@@ -403,7 +403,8 @@ class RawExposureCollection(Collection):
         # Sort by time difference in increasing order
         # This makes it easy to select only the nearest matches using indexing
         timedeltas = [abs(d["date"] - calib_date) for d in documents]
-        documents = [x for _, x in sorted(zip(timedeltas, documents))]
+        indices = np.argsort(timedeltas)
+        documents = [documents[i] for i in indices]
 
         return documents
 
