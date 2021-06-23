@@ -1,6 +1,7 @@
 directories:
   archive: ${HUNTSMAN_ARCHIVE}
   reductions: ${HUNTSMAN_ARCHIVE}/reductions
+  plots: ${HUNTSMAN_ARCHIVE}/plots
 
 fits_header:
   date_key: "DATE-OBS"
@@ -115,8 +116,21 @@ quality:
           greater_than: 0.13
           less_than: 0.19
 
+# Configurations for Pyro services
 pyro:
-  host: localhost
-  port: 6563
-  refcat:
+  host: localhost  # Hostname of the Pyro server
+  port: 6563  # Port of the pyro name server
+  refcat:  # kwargs that are parsed to init function of refcat client
     name: "refcat"
+
+plotter:
+  # List of kwargs for individual plotters
+  # kwargs are parsed directly to init function of each plotter
+  - directory_prefix: "default"
+    plot_configs:
+      plot_by_camera_filter:
+        - x_key: "AIRMASS"
+          y_key: "metrics.calexp.zp_mag"
+      hist_by_camera_filter:
+        - "metrics.calexp.psf_fwhm_arcsec"
+        - "metrics.calexp.zp_mag"

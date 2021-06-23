@@ -1,7 +1,6 @@
 """ Continually produce, update and archive master calibs. """
 import os
 import time
-import shutil
 import datetime
 from threading import Thread
 
@@ -11,7 +10,6 @@ from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import date_to_ymd
 from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
 from huntsman.drp.lsst.butler import TemporaryButlerRepository
-from huntsman.drp.lsst.utils.calib import get_calib_filename
 
 
 class MasterCalibMaker(HuntsmanBase):

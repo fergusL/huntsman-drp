@@ -21,6 +21,33 @@ exposure_sequence:
   bias: 32  # ADU
   pixel_size: 1.2  # Arcseconds per pixel
 
+mongodb:
+  collections:
+    RawExposureCollection:
+      name: "test_real_data"
+
 pyro:
   refcat:
     name: test_refcat
+
+plotter:
+  - directory_prefix: "test1"
+    plot_configs:
+      plot_by_camera:
+        - x_key: "expTime"
+          y_key: "metrics.clipped_mean"
+      plot_by_camera_filter:
+        - x_key: "expTime"
+          y_key: "metrics.clipped_mean"
+          linewidth: 2
+      hist_by_camera_filter:
+        - key: "metrics.clipped_mean"
+          color: "red"
+  - directory_prefix: "test2"
+    find_kwargs:
+      document_filter:
+        filter: "g_band"
+    plot_configs:
+      plot_by_camera:
+        - x_key: "expTime"
+          y_key: "metrics.clipped_mean"

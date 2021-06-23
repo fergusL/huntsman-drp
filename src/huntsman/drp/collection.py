@@ -57,15 +57,15 @@ class Collection(HuntsmanBase):
         """
         return len(self.find(*args, **kwargs))
 
-    def find(self, document_filter=None, date_start=None, date_end=None, date=None, key=None,
+    def find(self, document_filter=None, date_min=None, date_max=None, date=None, key=None,
              screen=False, quality_filter=False, limit=None):
         """Get data for one or more matches in the table.
         Args:
             document_filter (dict, optional): A dictionary containing key, value pairs to be
                 matched against other documents, by default None
-            date_start (object, optional): Constrain query to a timeframe starting at date_start,
+            date_min (object, optional): Constrain query to a timeframe starting at date_min,
                 by default None.
-            date_end (object, optional): Constrain query to a timeframe ending at date_end, by
+            date_max (object, optional): Constrain query to a timeframe ending at date_max, by
                 default None.
             date (object, optional):
                 Constrain query to specific date, by default None.
@@ -87,10 +87,10 @@ class Collection(HuntsmanBase):
         # Add date range to criteria if provided
         date_constraint = {}
 
-        if date_start is not None:
-            date_constraint.update({"greater_than_equal": parse_date(date_start)})
-        if date_end is not None:
-            date_constraint.update({"less_than": parse_date(date_end)})
+        if date_min is not None:
+            date_constraint.update({"greater_than_equal": parse_date(date_min)})
+        if date_max is not None:
+            date_constraint.update({"less_than": parse_date(date_max)})
         if date is not None:
             date_constraint.update({"equal": parse_date(date)})
 
@@ -263,8 +263,8 @@ class Collection(HuntsmanBase):
             list: Query result.
         """
         date_now = current_date()
-        date_start = date_now - timedelta(days=days, hours=hours, seconds=seconds)
-        return self.find(date_start=date_start, **kwargs)
+        date_min = date_now - timedelta(days=days, hours=hours, seconds=seconds)
+        return self.find(date_min=date_min, **kwargs)
 
     def delete_all(self, really=False, **kwargs):
         """ Delete all documents from the collection. """
@@ -392,11 +392,11 @@ class RawExposureCollection(Collection):
 
         # Add valid date range to query
         calib_date = parse_date(calib_date)
-        date_start = calib_date - validity
-        date_end = calib_date + validity
+        date_min = calib_date - validity
+        date_max = calib_date + validity
 
         # Do the query
-        documents = self.find(doc_filter, date_start=date_start, date_end=date_end)
+        documents = self.find(doc_filter, date_min=date_min, date_max=date_max)
         self.logger.debug(f"Found {len(documents)} matching raw calib documents for"
                           f" {calib_document} at {calib_date}.")
 
@@ -423,13 +423,13 @@ class RawExposureCollection(Collection):
             validity = timedelta(days=self.config["calibs"]["validity"])
 
         calib_date = parse_date(calib_date)
-        date_start = calib_date - validity
-        date_end = calib_date + validity
+        date_min = calib_date - validity
+        date_max = calib_date + validity
 
         # Get metadata for all raw calibs that are valid for this date
         if documents is None:
-            documents = self.find({"dataType": {"in": data_types}}, date_start=date_start,
-                                  date_end=date_end, screen=True, quality_filter=True)
+            documents = self.find({"dataType": {"in": data_types}}, date_min=date_min,
+                                  date_max=date_max, screen=True, quality_filter=True)
         else:
             documents = [d for d in documents if d["dataType"] in data_types]
 
@@ -517,8 +517,8 @@ class MasterCalibCollection(Collection):
 
         # Specify valid date range
         date = parse_date(document["dateObs"])
-        date_start = date - validity
-        date_end = date + validity
+        date_min = date - validity
+        date_max = date + validity
 
         best_calibs = {}
         for calib_type in self.config["calibs"]["types"]:
@@ -527,7 +527,7 @@ class MasterCalibCollection(Collection):
             doc_filter["datasetType"] = calib_type
 
             # Find matching docs within valid date range
-            calib_docs = self.find(doc_filter, date_start=date_start, date_end=date_end)
+            calib_docs = self.find(doc_filter, date_min=date_min, date_max=date_max)
 
             # If none within valid range, log a warning and proceed
             if len(calib_docs) == 0:

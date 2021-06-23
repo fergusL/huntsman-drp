@@ -127,10 +127,10 @@ class OffsetSkyReduction(LsstReduction):
             list of RawExposureDocument: The matching documents.
         """
         td = timedelta(minutes=self._timedelta_minutes)
-        date_start = document["date"] - td
-        date_end = document["date"] + td
+        date_min = document["date"] - td
+        date_max = document["date"] + td
 
-        matches = self._exposure_collection.find(date_start=date_start, date_end=date_end,
+        matches = self._exposure_collection.find(date_min=date_min, date_max=date_max,
                                                  **self._sky_query)
 
         if not matches:

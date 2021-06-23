@@ -90,16 +90,16 @@ def create_test_bulter_repository(directory, config=None, with_calibs=False, **k
     return br
 
 
-def create_test_exposure_collection(config=None, name="test-real-data", clear=True):
+def create_test_exposure_collection(config=None, clear=True):
     """ Ingest real testing images into a RawExposureCollection
     """
     if config is None:
-        config = get_config()
+        config = get_config(testing=True)
 
     dir = os.path.join(config["directories"]["root"], "tests", "data", "raw")
     filenames = get_testdata_fits_filenames(config)
 
-    exposure_collection = RawExposureCollection(config=config, collection_name=name)
+    exposure_collection = RawExposureCollection(config=config)
     if clear:
         exposure_collection.delete_all(really=True)
         assert not exposure_collection.find()

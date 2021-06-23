@@ -27,32 +27,32 @@ def test_datatable_query_by_date(exposure_collection, config):
     n_files = len(dates)
 
     dates_unique = np.unique(dates)  # Sorted array of unique dates
-    date_end = dates_unique[-1]
-    for date_start in dates_unique[:-1]:
+    date_max = dates_unique[-1]
+    for date_min in dates_unique[:-1]:
         # Get filenames between dates
-        filenames = exposure_collection.find(key="filename", date_start=date_start,
-                                             date_end=date_end)
+        filenames = exposure_collection.find(key="filename", date_min=date_min,
+                                             date_max=date_max)
         assert len(filenames) <= n_files  # This holds because we sorted the dates
         n_files = len(filenames)
         for filename in filenames:
             # Assert date is within expected range
             header = read_fits_header(filename)
             date = parse_date(fits_header_translator.translate_dateObs(header))
-            assert date >= parse_date(date_start)
-            assert date < parse_date(date_end)
+            assert date >= parse_date(date_min)
+            assert date < parse_date(date_max)
 
 
 def test_query_latest(exposure_collection, config, tol=1):
     """Test query_latest finds the correct number of DB entries."""
-    date_start = config["exposure_sequence"]["start_date"]
+    date_min = config["exposure_sequence"]["start_date"]
     n_days = config["exposure_sequence"]["n_days"]
-    date_start = parse_date(date_start)
+    date_min = parse_date(date_min)
     date_now = current_date()
 
-    if date_now <= date_start + timedelta(days=n_days):
+    if date_now <= date_min + timedelta(days=n_days):
         pytest.skip("Test does not work unless current date is later than all test exposures.")
 
-    timediff = date_now - date_start
+    timediff = date_now - date_min
     # This should capture all the files
     qresult = exposure_collection.find_latest(days=timediff.days + tol)
     assert len(qresult) == len(exposure_collection.find())
