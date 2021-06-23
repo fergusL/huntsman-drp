@@ -7,12 +7,17 @@ def test_calexp_quality_monitor(exposure_collection_real_data, master_calib_coll
                                 testing_refcat_server, config):
     """ Test that the quality monitor is able to calculate and archive calexp metrics. """
 
+    # Make sure the service uses the correct collections
+    raw_name = exposure_collection_real_data.collection_name
+    calib_name = master_calib_collection_real_data.collection_name
+    config["mongodb"]["collections"]["RawExposureCollection"]["name"] = raw_name
+    config["mongodb"]["collections"]["MasterCalibCollection"]["name"] = calib_name
+
     n_to_process = exposure_collection_real_data.count_documents({"dataType": "science"})
-    m = CalexpQualityMonitor(exposure_collection=exposure_collection_real_data,
-                             status_interval=5, queue_interval=5,
-                             calib_collection=master_calib_collection_real_data,
-                             config=config)
+
+    m = CalexpQualityMonitor(status_interval=5, queue_interval=5, config=config)
     m.start()
+
     i = 0
     timeout = 180
     try:

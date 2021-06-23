@@ -30,21 +30,19 @@ class Collection(HuntsmanBase):
         if not db_name:
             db_name = cfg["db_name"]
 
+        # Get collection name from config if not explicitly provided
         if not collection_name:
             collection_name = cfg["collections"][self.__class__.__name__]["name"]
 
         self._db_name = db_name
-        self._collection_name = collection_name
+        self.collection_name = collection_name
 
         # Initialise the DB
         db_name = self.config["mongodb"]["db_name"]
         self._connect()
 
-    # Properties
-
-    @property
-    def collection_name(self):
-        return self._collection_name
+    def __str__(self):
+        return f"{self.collection_name} ({self.__class__.__name__})"
 
     # Public methods
 
@@ -300,7 +298,7 @@ class Collection(HuntsmanBase):
             raise err
 
         self._db = self._client[self._db_name]
-        self._collection = self._db[self._collection_name]
+        self._collection = self._db[self.collection_name]
 
         # Define which keys identify unique documents
         self._set_unique_keys()
@@ -343,8 +341,8 @@ class RawExposureCollection(Collection):
 
     _document_type = RawExposureDocument
 
-    def __init__(self, collection_name="raw_data", **kwargs):
-        super().__init__(collection_name=collection_name, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     # Public methods
 
@@ -497,8 +495,8 @@ class MasterCalibCollection(Collection):
 
     _document_type = CalibDocument
 
-    def __init__(self, collection_name="master_calib", **kwargs):
-        super().__init__(collection_name=collection_name, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def get_matching_calibs(self, document):
         """ Return best matching set of calibs for a given document.

@@ -115,7 +115,7 @@ class FileIngestor(ProcessQueue):
         self.logger.debug(f"Found {len(files_in_directory)} FITS files in {self._directory}.")
 
         # Get set of all files that are ingested and pass screening
-        files_ingested = set(self._exposure_collection.find(screen=True, key="filename"))
+        files_ingested = set(self.exposure_collection.find(screen=True, key="filename"))
 
         # Identify files that require processing
         files_to_process = files_in_directory - files_ingested

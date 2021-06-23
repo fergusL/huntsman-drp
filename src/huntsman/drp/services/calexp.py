@@ -125,8 +125,8 @@ class CalexpQualityMonitor(ProcessQueue):
 
     def _get_objs(self):
         """ Update the set of data IDs that require processing. """
-        docs = self._exposure_collection.find({"dataType": "science"}, screen=True,
-                                              quality_filter=True)
+        docs = self.exposure_collection.find({"dataType": "science"}, screen=True,
+                                             quality_filter=True)
         return [d for d in docs if self._requires_processing(d)]
 
     def _requires_processing(self, document):

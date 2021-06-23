@@ -69,8 +69,7 @@ def _wrap_process_func(i, func):
         gc.collect()
 
 
-def _init_pool(function, config, logger, in_queue, out_queue, stp_queue, exp_coll_name,
-               calib_coll_name):
+def _init_pool(function, config, in_queue, out_queue, stp_queue):
     """ Initialise the process pool.
     This function is required because we need to share the queue objects with each process and
     they cannot be parsed directly. Additionally create Collection objects here so that they do not
@@ -78,12 +77,9 @@ def _init_pool(function, config, logger, in_queue, out_queue, stp_queue, exp_col
     Args:
         function (Function): The wrapped processing function.
         config (dict): The config.
-        logger (logger): The logger object. TODO: Does this need to be parsed?
         in_queue (Queue): The input queue.
         out_queue (Queue): The output queue.
         stp_queue (Queue): The queue used to send the stop messages.
-        exp_col_name (str): The name of the exposure collection. TODO: Get this from the config.
-        calib_col_name (str): The name of the calib collection. TODO: Get this from the config.
     """
     # Declare global objects
     global exposure_collection
@@ -97,10 +93,9 @@ def _init_pool(function, config, logger, in_queue, out_queue, stp_queue, exp_col
     output_queue = out_queue
     stop_queue = stp_queue
 
-    exposure_collection = RawExposureCollection(collection_name=exp_coll_name,
-                                                config=config, logger=logger)
-    calib_collection = MasterCalibCollection(collection_name=calib_coll_name,
-                                             config=config, logger=logger)
+    exposure_collection = RawExposureCollection(config=config)
+
+    calib_collection = MasterCalibCollection(config=config)
 
 
 class ProcessQueue(HuntsmanBase, ABC):
@@ -129,12 +124,9 @@ class ProcessQueue(HuntsmanBase, ABC):
         # Setup the exposure collections
         if exposure_collection is None:
             exposure_collection = RawExposureCollection(config=self.config, logger=self.logger)
-        self._exposure_collection = exposure_collection
 
-        # Setup the exposure collection
-        if calib_collection is None:
-            calib_collection = MasterCalibCollection(config=self.config, logger=self.logger)
-        self._calib_collection = calib_collection
+        # Setup the collections
+        self.exposure_collection = RawExposureCollection(config=self.config, logger=self.logger)
 
         # Sleep intervals
         self._queue_interval = queue_interval
@@ -278,10 +270,11 @@ class ProcessQueue(HuntsmanBase, ABC):
 
         wrapped_func = partial(_wrap_process_func, func=process_func)
 
-        pool_init_args = (wrapped_func, self.config, self.logger,
-                          self._input_queue, self._output_queue, self._stop_queue,
-                          self._exposure_collection.collection_name,
-                          self._calib_collection.collection_name)
+        pool_init_args = (wrapped_func,
+                          self.config,
+                          self._input_queue,
+                          self._output_queue,
+                          self._stop_queue)
 
         # Avoid Pool context manager to make multiprocessing coverage work
         pool = self._pool_class(self._nproc, initializer=_init_pool, initargs=pool_init_args)
