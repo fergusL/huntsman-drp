@@ -65,6 +65,10 @@ def get_wcs(filename, header, timeout=60, downsample=4, radius=5, remake_wcs=Fal
         result["ra_centre"] = coord.ra.to_value("deg")
         result["dec_centre"] = coord.dec.to_value("deg")
 
+    # Raise error so parent function knows it failed
+    else:
+        raise RuntimeError(f"Unable to determine WCS for {filename}.")
+
     return result
 
 

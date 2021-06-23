@@ -59,14 +59,15 @@ def _get_raw_metrics(filename, metric_names, logger):
         data = read_fits_data(filename)  # Returns float array
     except Exception as err:
         logger.error(f"Unable to read {filename}: {err!r}")
-
-    for metric in metric_names:
-        func = load_module(f"huntsman.drp.metrics.raw.{metric}")
-        try:
-            result.update(func(filename, data=data, header=header))
-        except Exception as err:
-            logger.error(f"Exception while calculating {metric} for {filename}: {err!r}")
-            success = False
+        success = False
+    else:
+        for metric in metric_names:
+            func = load_module(f"huntsman.drp.metrics.raw.{metric}")
+            try:
+                result.update(func(filename, data=data, header=header))
+            except Exception as err:
+                logger.error(f"Exception while calculating {metric} for {filename}: {err!r}")
+                success = False
 
     return result, success
 
