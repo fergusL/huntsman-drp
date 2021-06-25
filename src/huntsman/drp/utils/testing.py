@@ -1,6 +1,5 @@
 import os
 import yaml
-import time
 from glob import glob
 from datetime import timedelta
 import numpy as np
@@ -12,7 +11,7 @@ from huntsman.drp.lsst.butler import ButlerRepository, TemporaryButlerRepository
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import parse_date
 from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
-from huntsman.drp.services.ingestor import FileIngestor
+from huntsman.drp.utils.ingest import ingest_file
 from huntsman.drp.lsst.utils.calib import get_calib_filename
 
 
@@ -96,7 +95,6 @@ def create_test_exposure_collection(config=None, clear=True):
     if config is None:
         config = get_config(testing=True)
 
-    dir = os.path.join(config["directories"]["root"], "tests", "data", "raw")
     filenames = get_testdata_fits_filenames(config)
 
     exposure_collection = RawExposureCollection(config=config)
@@ -105,20 +103,9 @@ def create_test_exposure_collection(config=None, clear=True):
         assert not exposure_collection.find()
 
     # Make and start FileIngestor object
-    ing = FileIngestor(directory=dir, config=config, exposure_collection=exposure_collection)
-    ing.start()
+    for filename in filenames:
+        ingest_file(filename, config=config)
 
-    i = 0
-    while i < 30:
-        if ing.status["processed"] == len(filenames):
-            break
-        time.sleep(1)
-        i += 1
-
-    ing.stop()
-
-    assert ing.status["processed"] == len(filenames)
-    assert ing.status["failed"] == 0
     assert len(exposure_collection.find()) == len(filenames)
     assert set(exposure_collection.find(key="filename")) == set(filenames)
     assert len(exposure_collection.find(screen=True)) == len(filenames)

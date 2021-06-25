@@ -1,11 +1,23 @@
 from functools import partial
 from copy import deepcopy
 
+from huntsman.drp.collection import RawExposureCollection
 from huntsman.drp.services.base import ProcessQueue
 from huntsman.drp.fitsutil import FitsHeaderTranslator, read_fits_header, read_fits_data
 from huntsman.drp.utils import load_module
 from huntsman.drp.metrics.raw import RAW_METRICS
 from huntsman.drp.utils.ingest import METRIC_SUCCESS_FLAG, list_fits_files_recursive
+
+
+def ingest_file(filename, config=None):
+    """ Convenience function to easily ingest one file.
+    Args:
+        filename (str): The name of the file to ingest.
+        config (dict, optional): The config. If not provided, use default config.
+    """
+    collection = RawExposureCollection(config=config)
+
+    return _process_file(filename, metric_names=RAW_METRICS, exposure_collection=collection)
 
 
 def _process_file(filename, metric_names, exposure_collection, **kwargs):
@@ -25,18 +37,20 @@ def _process_file(filename, metric_names, exposure_collection, **kwargs):
     logger.debug(f"Processing file: {filename}.")
     fits_header_translator = FitsHeaderTranslator(config=config, logger=logger)
 
-    # Read the header
-    parsed_header = fits_header_translator.read_and_parse(filename)
-
     # Get the metrics
     metrics, success = _get_raw_metrics(filename, metric_names=metric_names, logger=logger)
     metrics[METRIC_SUCCESS_FLAG] = success
     to_update = {"metrics": metrics}
 
+    # Read the header
+    # NOTE: The header is currently modified when calculating metrics
+    parsed_header = fits_header_translator.read_and_parse(filename)
+
     # Update the document (upserting if necessary)
+    # Note we only use the filename to match as other keys may change
     to_update.update(parsed_header)
     to_update["filename"] = filename
-    exposure_collection.update_one(parsed_header, to_update=to_update, upsert=True)
+    exposure_collection.update_one({"filename": filename}, to_update=to_update, upsert=True)
 
     # Raise an exception if not success
     if not success:
