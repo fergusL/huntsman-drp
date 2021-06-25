@@ -11,7 +11,7 @@ from huntsman.drp.lsst.butler import ButlerRepository, TemporaryButlerRepository
 from huntsman.drp.base import HuntsmanBase
 from huntsman.drp.utils.date import parse_date
 from huntsman.drp.collection import RawExposureCollection, MasterCalibCollection
-from huntsman.drp.utils.ingest import ingest_file
+from huntsman.drp.services.ingestor import ingest_file
 from huntsman.drp.lsst.utils.calib import get_calib_filename
 
 
