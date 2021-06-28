@@ -197,6 +197,8 @@ class RefcatClient(HuntsmanBase):
         Args:
             *args, **kwargs: Parsed to TapReferenceCatalogue.make_reference_catalogue.
         """
+        self.logger.info("Creating reference catalogue.")
+
         filename = kwargs.pop("filename", None)  # file needs to be stored on local volume
 
         # Get and decode the data sent over the network

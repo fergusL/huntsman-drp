@@ -49,7 +49,8 @@ class LsstReduction(ReductionBase):
         dataIds = [self._butler_repo.document_to_dataId(d) for d in self.science_docs]
 
         self.logger.info(f"Making calexps for {len(self.science_docs)} science images.")
-        self._butler_repo.make_calexps(dataIds=dataIds, **self._calexp_kwargs)
+        self._butler_repo.make_calexps(dataIds=dataIds, remake_existing=False,
+                                       **self._calexp_kwargs)
 
         self.logger.info(f"Making coadds from {len(self.science_docs)} calexps.")
         self._butler_repo.make_coadd(dataIds=dataIds, **self._coadd_kwargs)

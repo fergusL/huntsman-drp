@@ -340,12 +340,13 @@ class ButlerRepository(HuntsmanBase):
         return tasks.make_calexp(dataId, rerun=rerun, butler_dir=self.butler_dir,
                                  calib_dir=self.calib_dir, **kwargs)
 
-    def make_calexps(self, dataIds=None, rerun="default", **kwargs):
+    def make_calexps(self, dataIds=None, rerun="default", remake_existing=True, **kwargs):
         """ Make calibrated exposures (calexps) using the LSST stack.
         Args:
             dataIds (list of dict): List of dataIds to process. If None (default), will process
                 all ingested science exposures.
             rerun (str, optional): The name of the rerun. Default is "default".
+            remake_existing (bool, optional): If True (default), remake calexps that already exist.
             **kwargs: Parsed to `tasks.make_calexps`.
         """
         # Get dataIds for the raw science frames
@@ -353,6 +354,17 @@ class ButlerRepository(HuntsmanBase):
         if dataIds is None:
             dataIds = self.get_dataIds(datasetType="raw", dataId={'dataType': "science"},
                                        extra_keys=["filter"])
+
+        if not remake_existing:
+            dataIds_to_skip = []
+            for dataId in dataIds:
+                try:
+                    calexp = self.get("calexp", dataId=dataId, rerun=rerun)
+                    if calexp:
+                        dataIds_to_skip.append(dataId)
+                except Exception:
+                    pass
+            dataIds = [d for d in dataIds if d not in dataIds_to_skip]
 
         self.logger.info(f"Making calexp(s) from {len(dataIds)} dataId(s).")
 

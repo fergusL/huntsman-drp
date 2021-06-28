@@ -39,8 +39,8 @@ class ReductionBase(HuntsmanBase):
             calib_collection = MasterCalibCollection(config=self.config)
         self._calib_collection = calib_collection
 
-        self.science_docs = None
-        self.calib_docs = None
+        self.science_docs = self._exposure_collection.find(**self._query)
+        self.calib_docs = self._get_calibs(self.science_docs)
 
         if initialise:
             self._initialise()
@@ -54,12 +54,6 @@ class ReductionBase(HuntsmanBase):
         This method is responsible for querying the database, ingesting the files and producing
         the reference catalogue.
         """
-        # Identify science docs
-        self.science_docs = self._exposure_collection.find(**self._query)
-
-        # Get matching master calibs
-        self.calib_docs = self._get_calibs(self.science_docs)
-
         # Make reference catalogue
         self._make_reference_catalogue()
 
